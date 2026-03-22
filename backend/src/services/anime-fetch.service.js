@@ -86,13 +86,28 @@ function isRandomMode(config) {
   return config?.randomMode !== false;
 }
 
+function resolveRedditVideoPayload(post) {
+  const sources = [post, ...(Array.isArray(post?.crosspost_parent_list) ? post.crosspost_parent_list : [])].filter(Boolean);
+
+  for (const source of sources) {
+    const redditVideo = source?.secure_media?.reddit_video || source?.media?.reddit_video;
+    if (redditVideo?.fallback_url) {
+      return { redditVideo, source };
+    }
+  }
+
+  return null;
+}
+
 function extractReelCandidate(post, config) {
-  const redditVideo = post?.secure_media?.reddit_video || post?.media?.reddit_video;
-  if (!redditVideo?.fallback_url) {
+  const resolved = resolveRedditVideoPayload(post);
+  if (!resolved) {
     return null;
   }
 
-  const width = Number(redditVideo.width || 0);
+  const { redditVideo, source } = resolved;
+
+  const width = Number(redditVideo.width || source?.preview?.images?.[0]?.source?.width || 0);
   const score = Number(post.score || 0);
 
   if (!isRandomMode(config) && width < config.minWidth) {
@@ -115,8 +130,8 @@ function extractReelCandidate(post, config) {
   }
 
   return {
-    sourceId: post.id,
-    sourceUrl: `https://www.reddit.com${post.permalink}`,
+    sourceId: post.id || source?.id,
+    sourceUrl: `https://www.reddit.com${post.permalink || source?.permalink || ""}`,
     sourcePlatform: "reddit",
     postType: "reel",
     mediaUrl: normalizeUrl(redditVideo.fallback_url, { stripQuery: true }),
