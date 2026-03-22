@@ -1,20 +1,34 @@
 import { useEffect, useState } from "react";
 import api from "../services/api";
 
+const TOKEN_KEY = "auth_token";
+const USER_KEY = "auth_user";
+
+function readToken() {
+  return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+}
+
+function readUser() {
+  const raw = sessionStorage.getItem(USER_KEY) || localStorage.getItem(USER_KEY);
+  return raw ? JSON.parse(raw) : null;
+}
+
 export function useAuth() {
-  const [token, setToken] = useState(localStorage.getItem("auth_token"));
-  const [user, setUser] = useState(() => {
-    const raw = localStorage.getItem("auth_user");
-    return raw ? JSON.parse(raw) : null;
-  });
+  const [token, setToken] = useState(readToken());
+  const [user, setUser] = useState(readUser());
   const [instagramStatus, setInstagramStatus] = useState(null);
 
   async function validateSession() {
     try {
       await api.get("/auth/me");
       return true;
-    } catch {
-      return false;
+    } catch (error) {
+      const status = Number(error?.response?.status || 0);
+      // Keep the session for transient network/CORS issues and only logout on real auth failures.
+      if (status === 401 || status === 403) {
+        return false;
+      }
+      return true;
     }
   }
 
@@ -22,7 +36,8 @@ export function useAuth() {
     let mounted = true;
 
     if (token) {
-      localStorage.setItem("auth_token", token);
+      sessionStorage.setItem(TOKEN_KEY, token);
+      localStorage.removeItem(TOKEN_KEY);
       validateSession().then((ok) => {
         if (!mounted) {
           return;
@@ -38,8 +53,10 @@ export function useAuth() {
         validateInstagramToken();
       });
     } else {
-      localStorage.removeItem("auth_token");
-      localStorage.removeItem("auth_user");
+      sessionStorage.removeItem(TOKEN_KEY);
+      sessionStorage.removeItem(USER_KEY);
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
     }
 
     return () => {
@@ -62,8 +79,10 @@ export function useAuth() {
     const { data } = await api.post("/auth/login", { email, password });
     setToken(data.token);
     setUser(data.user);
-    localStorage.setItem("auth_token", data.token);
-    localStorage.setItem("auth_user", JSON.stringify(data.user));
+    sessionStorage.setItem(TOKEN_KEY, data.token);
+    sessionStorage.setItem(USER_KEY, JSON.stringify(data.user));
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
     await validateInstagramToken();
   }
 
