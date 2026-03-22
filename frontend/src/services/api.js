@@ -1,7 +1,21 @@
 import axios from "axios";
 
+function resolveApiBaseUrl() {
+  const envBase = import.meta.env.VITE_API_URL;
+  if (envBase) {
+    return envBase;
+  }
+
+  if (typeof window !== "undefined" && window.location.hostname !== "localhost") {
+    return "https://instaflowinstaflow-backend.onrender.com/api";
+  }
+
+  return "http://localhost:5000/api";
+}
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api"
+  baseURL: resolveApiBaseUrl(),
+  timeout: 15000
 });
 
 api.interceptors.request.use((config) => {
