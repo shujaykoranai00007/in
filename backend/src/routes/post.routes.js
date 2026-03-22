@@ -464,7 +464,7 @@ postRouter.get("/", async (req, res, next) => {
 
 postRouter.get("/history", async (_req, res, next) => {
   try {
-    const posts = await Post.find({ status: { $in: ["pending", "posted", "failed"] } }).sort({
+    const posts = await Post.find({ status: { $in: ["pending", "processing", "posted", "failed"] } }).sort({
       updatedAt: -1
     }).limit(200).lean();
     return res.json(posts);
