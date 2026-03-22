@@ -43,6 +43,14 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", uptime: process.uptime() });
 });
 
+app.get("/", (_req, res) => {
+  res.json({
+    service: "instaflow-backend",
+    status: "ok",
+    message: "API is running. Use /health or /api/* endpoints."
+  });
+});
+
 app.use("/media", express.static(uploadsDir));
 app.use("/music-library", express.static(musicDir));
 
