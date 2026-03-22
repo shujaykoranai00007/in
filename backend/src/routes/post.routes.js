@@ -11,6 +11,7 @@ import { Post } from "../models/Post.js";
 import { generateUploadText } from "../services/caption-suggest.service.js";
 import { extractMediaFromUrl } from "../services/media-extract.service.js";
 import { processPendingPosts } from "../services/scheduler.service.js";
+import { cleanupPostLocalMedia } from "../services/media-cleanup.service.js";
 
 export const postRouter = Router();
 
@@ -499,16 +500,61 @@ postRouter.patch("/:id", async (req, res, next) => {
 
 postRouter.delete("/:id", async (req, res, next) => {
   try {
-    const removed = await Post.findOneAndDelete({
+    const candidate = await Post.findOne({
       _id: req.params.id,
       status: { $in: ["pending", "failed"] }
     });
 
-    if (!removed) {
+    if (!candidate) {
       return res.status(404).json({ message: "Post not found or cannot be deleted" });
     }
 
+    try {
+      await cleanupPostLocalMedia(candidate);
+    } catch (cleanupError) {
+      console.error("Failed to remove local media while deleting post", candidate._id, cleanupError);
+    }
+
+    await Post.deleteOne({ _id: candidate._id });
+
     return res.status(204).send();
+  } catch (error) {
+    return next(error);
+  }
+});
+
+postRouter.delete("/:id/local-media", async (req, res, next) => {
+  try {
+    const post = await Post.findById(req.params.id);
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    if (post.status === "processing") {
+      return res.status(409).json({
+        message: "Cannot delete local media while post is processing"
+      });
+    }
+
+    const cleanup = await cleanupPostLocalMedia(post);
+    await Post.updateOne(
+      { _id: post._id },
+      {
+        $set: {
+          localMediaPath: null,
+          isTemporaryMedia: false,
+          localMediaDeletedAt: new Date()
+        }
+      }
+    );
+
+    return res.json({
+      removed: cleanup.removed,
+      bytesFreed: cleanup.bytesFreed,
+      message: cleanup.removed
+        ? "Local media deleted"
+        : "No local media file found"
+    });
   } catch (error) {
     return next(error);
   }

@@ -47,6 +47,10 @@ const postSchema = new mongoose.Schema(
       type: Boolean,
       default: false
     },
+    localMediaDeletedAt: {
+      type: Date,
+      default: null
+    },
     postType: {
       type: String,
       enum: ["reel", "post"],

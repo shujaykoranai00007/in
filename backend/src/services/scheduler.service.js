@@ -1,5 +1,6 @@
 import { Post } from "../models/Post.js";
 import { publishPost } from "./instagram.service.js";
+import { cleanupPostLocalMedia } from "./media-cleanup.service.js";
 
 const MAX_RETRIES = 3;
 const PROCESSING_STALE_MINUTES = 8;
@@ -127,6 +128,25 @@ export async function processPendingPosts() {
           $set: successUpdate
         }
       );
+
+      try {
+        const cleanup = await cleanupPostLocalMedia(lockedPost);
+        if (cleanup.removed) {
+          await Post.updateOne(
+            { _id: lockedPost._id },
+            {
+              $set: {
+                localMediaPath: null,
+                isTemporaryMedia: false,
+                localMediaDeletedAt: new Date()
+              }
+            }
+          );
+        }
+      } catch (cleanupError) {
+        console.error("Local media cleanup failed for post", lockedPost._id, cleanupError);
+      }
+
       continue;
     }
 

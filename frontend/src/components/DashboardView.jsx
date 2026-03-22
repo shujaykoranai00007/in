@@ -31,6 +31,18 @@ function formatNumber(value) {
   }).format(Number(value));
 }
 
+function formatBytes(bytes) {
+  const value = Number(bytes || 0);
+  if (!Number.isFinite(value) || value <= 0) {
+    return "0 B";
+  }
+
+  const units = ["B", "KB", "MB", "GB"];
+  const exponent = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
+  const amount = value / 1024 ** exponent;
+  return `${amount.toFixed(amount >= 10 ? 0 : 1)} ${units[exponent]}`;
+}
+
 export default function DashboardView({ user, onLogout, instagramStatus }) {
   const POLL_INTERVAL_MS = 10000;
   const TOAST_TTL_MS = 12000;
@@ -70,6 +82,7 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
   const [instagramDetails, setInstagramDetails] = useState(null);
   const [instagramDetailsLoading, setInstagramDetailsLoading] = useState(false);
   const [instagramDetailsError, setInstagramDetailsError] = useState("");
+  const [mediaDeleteInProgress, setMediaDeleteInProgress] = useState({});
   const previousStatusByIdRef = useRef(new Map());
   const hasHydratedStatusesRef = useRef(false);
 
@@ -634,6 +647,53 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
         URL.revokeObjectURL(mediaPreview);
       }
       setMediaPreview("");
+    }
+  }
+
+  function hasDeletableLocalMedia(post) {
+    if (!post || post.localMediaDeletedAt) {
+      return false;
+    }
+
+    if (post.localMediaPath) {
+      return true;
+    }
+
+    return /\/media\//i.test(String(post.mediaUrl || ""));
+  }
+
+  async function handleDeleteLocalMedia(post) {
+    if (!post?._id || !hasDeletableLocalMedia(post)) {
+      return;
+    }
+
+    const warnPending = post.status === "pending" || post.status === "processing";
+    const confirmed = window.confirm(
+      warnPending
+        ? "This post is not published yet. Deleting local media now can make posting fail. Continue?"
+        : "Delete local media file for this post?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setMediaDeleteInProgress((prev) => ({ ...prev, [post._id]: true }));
+    setMessage("");
+
+    try {
+      const { data } = await api.delete(`/posts/${post._id}/local-media`);
+      const freedText = data?.bytesFreed ? ` (${formatBytes(data.bytesFreed)} freed)` : "";
+      setMessage(`${data?.message || "Local media cleanup completed"}${freedText}`);
+      await loadPosts();
+    } catch (error) {
+      setMessage(error?.response?.data?.message || "Failed to delete local media.");
+    } finally {
+      setMediaDeleteInProgress((prev) => {
+        const next = { ...prev };
+        delete next[post._id];
+        return next;
+      });
     }
   }
 
@@ -1500,6 +1560,18 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                       <p className="muted-text">Scheduled</p>
                       <p className="mt-0.5 font-semibold text-slate-700">{formatDate(post.scheduledTime)}</p>
                     </div>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteLocalMedia(post)}
+                        disabled={!hasDeletableLocalMedia(post) || Boolean(mediaDeleteInProgress[post._id])}
+                        className="ghost-btn inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs disabled:opacity-50"
+                      >
+                        <Trash2 size={12} />
+                        {mediaDeleteInProgress[post._id] ? "Deleting..." : "Delete Local Media"}
+                      </button>
+                    </div>
                   </article>
                 ))}
 
@@ -1518,6 +1590,7 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                       <th className="py-3">Caption</th>
                       <th className="py-3">Scheduled</th>
                       <th className="py-3">Status</th>
+                      <th className="py-3">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1542,11 +1615,22 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                             {post.status}
                           </span>
                         </td>
+                        <td className="py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteLocalMedia(post)}
+                            disabled={!hasDeletableLocalMedia(post) || Boolean(mediaDeleteInProgress[post._id])}
+                            className="ghost-btn inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs disabled:opacity-50"
+                          >
+                            <Trash2 size={12} />
+                            {mediaDeleteInProgress[post._id] ? "Deleting..." : "Delete Local Media"}
+                          </button>
+                        </td>
                       </tr>
                     ))}
                     {!pendingPosts.length && (
                       <tr>
-                        <td colSpan={4} className="py-6 text-center text-muted">
+                        <td colSpan={5} className="py-6 text-center text-muted">
                           No pending posts.
                         </td>
                       </tr>
@@ -1589,6 +1673,18 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                       <span>Attempts: {post.attempts}</span>
                     </div>
 
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteLocalMedia(post)}
+                        disabled={!hasDeletableLocalMedia(post) || Boolean(mediaDeleteInProgress[post._id])}
+                        className="ghost-btn inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs disabled:opacity-50"
+                      >
+                        <Trash2 size={12} />
+                        {mediaDeleteInProgress[post._id] ? "Deleting..." : "Delete Local Media"}
+                      </button>
+                    </div>
+
                     {post.errorLog && (
                       <p className="mt-2 line-clamp-2 rounded-lg bg-red-50 px-2.5 py-2 text-xs text-red-700">{post.errorLog}</p>
                     )}
@@ -1611,6 +1707,7 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                       <th className="py-3">Attempts</th>
                       <th className="py-3">Status</th>
                       <th className="py-3">Error</th>
+                      <th className="py-3">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1631,11 +1728,22 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                           </span>
                         </td>
                         <td className="max-w-xs truncate py-3 text-muted">{post.errorLog || "-"}</td>
+                        <td className="py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteLocalMedia(post)}
+                            disabled={!hasDeletableLocalMedia(post) || Boolean(mediaDeleteInProgress[post._id])}
+                            className="ghost-btn inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs disabled:opacity-50"
+                          >
+                            <Trash2 size={12} />
+                            {mediaDeleteInProgress[post._id] ? "Deleting..." : "Delete Local Media"}
+                          </button>
+                        </td>
                       </tr>
                     ))}
                     {!history.length && (
                       <tr>
-                        <td colSpan={5} className="py-6 text-center text-muted">
+                        <td colSpan={6} className="py-6 text-center text-muted">
                           No history yet.
                         </td>
                       </tr>
