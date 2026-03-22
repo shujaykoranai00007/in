@@ -1709,7 +1709,11 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                         className={`status-pill ${
                           post.status === "posted"
                             ? "bg-emerald-100 text-emerald-900"
-                            : "bg-red-100 text-red-900"
+                            : post.status === "failed"
+                              ? "bg-red-100 text-red-900"
+                              : post.status === "processing"
+                                ? "bg-cyan-100 text-cyan-900"
+                                : "bg-amber-100 text-amber-900"
                         }`}
                       >
                         {post.status}
@@ -1717,7 +1721,7 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                     </div>
 
                     <div className="mt-3 rounded-lg bg-slate-100/80 px-2.5 py-2 text-xs">
-                      <p className="muted-text">Posted</p>
+                      <p className="muted-text">Updated</p>
                       <p className="mt-0.5 font-semibold text-slate-700">{formatDate(post.updatedAt)}</p>
                     </div>
 
@@ -1782,7 +1786,11 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                             className={`status-pill ${
                               post.status === "posted"
                                 ? "bg-emerald-100 text-emerald-900"
-                                : "bg-red-100 text-red-900"
+                                : post.status === "failed"
+                                  ? "bg-red-100 text-red-900"
+                                  : post.status === "processing"
+                                    ? "bg-cyan-100 text-cyan-900"
+                                    : "bg-amber-100 text-amber-900"
                             }`}
                           >
                             {post.status}
