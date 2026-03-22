@@ -550,15 +550,16 @@ async function prepareReelWithAudio(candidate) {
     return candidate.mediaUrl;
   }
 
-  // For reliable audio reels, we need to mux video+audio and host a final MP4.
+  // For reliable audio reels, we prefer muxed video+audio, but fall back to direct reel URL
+  // so reel-only automation doesn't fail when Reddit DASH audio is unavailable.
   if (!hasUsablePublicBaseUrl()) {
-    return "";
+    return candidate.mediaUrl;
   }
 
   const dashUrl = candidate.dashUrl || deriveDashUrlFromReelUrl(candidate.mediaUrl);
   const audioUrl = await pickDashAudioUrl(dashUrl);
   if (!audioUrl) {
-    return "";
+    return candidate.mediaUrl;
   }
 
   const safeId = String(candidate.sourceId || Date.now()).replace(/[^a-zA-Z0-9_-]/g, "");
@@ -586,7 +587,7 @@ async function prepareReelWithAudio(candidate) {
     return mediaUrl;
   } catch (error) {
     console.error("Failed to prepare reel with audio", error?.message || error);
-    return "";
+    return candidate.mediaUrl;
   } finally {
     await fs.promises.unlink(tempVideo).catch(() => {});
     await fs.promises.unlink(tempAudio).catch(() => {});
@@ -732,7 +733,7 @@ async function findAvailableCandidate(config, excludeKeys = new Set()) {
   const fallbackCandidates = await getRedditAnimeCandidates({
     ...config,
     subreddits: FALLBACK_SUBREDDITS,
-    contentType: "both",
+    contentType: config.contentType || "both",
     keywords: [],
     minScore: Math.max(0, Number(config.minScore || 0) - 15),
     minWidth: Math.max(480, Number(config.minWidth || 0) - 240),
