@@ -502,7 +502,7 @@ postRouter.delete("/:id", async (req, res, next) => {
   try {
     const candidate = await Post.findOne({
       _id: req.params.id,
-      status: { $in: ["pending", "failed"] }
+      status: { $in: ["pending", "processing", "posted", "failed"] }
     });
 
     if (!candidate) {

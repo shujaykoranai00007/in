@@ -83,6 +83,7 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
   const [instagramDetailsLoading, setInstagramDetailsLoading] = useState(false);
   const [instagramDetailsError, setInstagramDetailsError] = useState("");
   const [mediaDeleteInProgress, setMediaDeleteInProgress] = useState({});
+  const [postCancelInProgress, setPostCancelInProgress] = useState({});
   const previousStatusByIdRef = useRef(new Map());
   const hasHydratedStatusesRef = useRef(false);
 
@@ -690,6 +691,37 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
       setMessage(error?.response?.data?.message || "Failed to delete local media.");
     } finally {
       setMediaDeleteInProgress((prev) => {
+        const next = { ...prev };
+        delete next[post._id];
+        return next;
+      });
+    }
+  }
+
+  async function handleCancelPost(post) {
+    if (!post?._id) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Cancel this ${post.postType}? This will permanently remove it from the queue.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setPostCancelInProgress((prev) => ({ ...prev, [post._id]: true }));
+    setMessage("");
+
+    try {
+      await api.delete(`/posts/${post._id}`);
+      setMessage(`${post.postType} cancelled and removed from queue.`);
+      await loadPosts();
+    } catch (error) {
+      setMessage(error?.response?.data?.message || `Failed to cancel ${post.postType}.`);
+    } finally {
+      setPostCancelInProgress((prev) => {
         const next = { ...prev };
         delete next[post._id];
         return next;
@@ -1571,6 +1603,15 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                         <Trash2 size={12} />
                         {mediaDeleteInProgress[post._id] ? "Deleting..." : "Delete Local Media"}
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCancelPost(post)}
+                        disabled={Boolean(postCancelInProgress[post._id])}
+                        className="pro-btn inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs disabled:opacity-50"
+                      >
+                        <AlertTriangle size={12} />
+                        {postCancelInProgress[post._id] ? "Cancelling..." : "Cancel Post"}
+                      </button>
                     </div>
                   </article>
                 ))}
@@ -1616,15 +1657,26 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                           </span>
                         </td>
                         <td className="py-3">
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteLocalMedia(post)}
-                            disabled={!hasDeletableLocalMedia(post) || Boolean(mediaDeleteInProgress[post._id])}
-                            className="ghost-btn inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs disabled:opacity-50"
-                          >
-                            <Trash2 size={12} />
-                            {mediaDeleteInProgress[post._id] ? "Deleting..." : "Delete Local Media"}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteLocalMedia(post)}
+                              disabled={!hasDeletableLocalMedia(post) || Boolean(mediaDeleteInProgress[post._id])}
+                              className="ghost-btn inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs disabled:opacity-50"
+                            >
+                              <Trash2 size={12} />
+                              {mediaDeleteInProgress[post._id] ? "Deleting..." : "Delete Media"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleCancelPost(post)}
+                              disabled={Boolean(postCancelInProgress[post._id])}
+                              className="pro-btn inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs disabled:opacity-50"
+                            >
+                              <AlertTriangle size={12} />
+                              {postCancelInProgress[post._id] ? "Cancelling..." : "Cancel"}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1683,6 +1735,15 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                         <Trash2 size={12} />
                         {mediaDeleteInProgress[post._id] ? "Deleting..." : "Delete Local Media"}
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCancelPost(post)}
+                        disabled={Boolean(postCancelInProgress[post._id])}
+                        className="pro-btn inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs disabled:opacity-50"
+                      >
+                        <AlertTriangle size={12} />
+                        {postCancelInProgress[post._id] ? "Deleting..." : "Delete Post"}
+                      </button>
                     </div>
 
                     {post.errorLog && (
@@ -1729,15 +1790,26 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                         </td>
                         <td className="max-w-xs truncate py-3 text-muted">{post.errorLog || "-"}</td>
                         <td className="py-3">
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteLocalMedia(post)}
-                            disabled={!hasDeletableLocalMedia(post) || Boolean(mediaDeleteInProgress[post._id])}
-                            className="ghost-btn inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs disabled:opacity-50"
-                          >
-                            <Trash2 size={12} />
-                            {mediaDeleteInProgress[post._id] ? "Deleting..." : "Delete Local Media"}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteLocalMedia(post)}
+                              disabled={!hasDeletableLocalMedia(post) || Boolean(mediaDeleteInProgress[post._id])}
+                              className="ghost-btn inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs disabled:opacity-50"
+                            >
+                              <Trash2 size={12} />
+                              {mediaDeleteInProgress[post._id] ? "Deleting..." : "Delete Media"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleCancelPost(post)}
+                              disabled={Boolean(postCancelInProgress[post._id])}
+                              className="pro-btn inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs disabled:opacity-50"
+                            >
+                              <AlertTriangle size={12} />
+                              {postCancelInProgress[post._id] ? "Deleting..." : "Delete"}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

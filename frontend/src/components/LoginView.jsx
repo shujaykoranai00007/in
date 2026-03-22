@@ -59,7 +59,7 @@ export default function LoginView({ onLogin }) {
               transition={{ delay: 0.2, duration: 0.45 }}
               className="mt-6 rounded-xl border border-slate-200 bg-white/85 px-4 py-3 text-xs text-slate-700"
             >
-              <span className="text-cyan-700">Tip:</span> Keep your Instagram token refreshed and use public media URLs for successful publishes.
+              <span className="text-cyan-700">Developed by</span> Jay Bhimani
             </motion.div>
           </div>
 
