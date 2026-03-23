@@ -2,6 +2,7 @@ import axios from "axios";
 
 function resolveApiBaseUrl() {
   const envBase = import.meta.env.VITE_API_URL;
+  const renderFallback = "https://instaflowinstaflow-backend.onrender.com/api";
   const isLocalhost = typeof window !== "undefined" && window.location.hostname === "localhost";
 
   if (isLocalhost) {
@@ -17,11 +18,20 @@ function resolveApiBaseUrl() {
   }
 
   if (envBase) {
+    const envLooksLocal =
+      typeof envBase === "string" &&
+      (envBase.startsWith("http://localhost:") || envBase.startsWith("http://127.0.0.1:"));
+
+    // Ignore localhost API in hosted builds (common Vercel env misconfiguration).
+    if (!isLocalhost && envLooksLocal) {
+      return renderFallback;
+    }
+
     return envBase;
   }
 
   if (typeof window !== "undefined" && window.location.hostname !== "localhost") {
-    return "https://instaflowinstaflow-backend.onrender.com/api";
+    return renderFallback;
   }
 
   return "http://localhost:5000/api";
