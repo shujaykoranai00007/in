@@ -1,6 +1,17 @@
-import { Activity, CalendarClock, Clapperboard, History, LayoutDashboard, LogOut, Radar } from "lucide-react";
+import { memo, useEffect, useRef, useState } from "react";
+import {
+  Activity,
+  CalendarClock,
+  Clapperboard,
+  Gamepad2,
+  History,
+  LayoutDashboard,
+  LogOut,
+  Radar
+} from "lucide-react";
 
 const navItems = [
+  { id: "controlCenter", label: "Control", icon: Gamepad2 },
   { id: "schedule", label: "Schedule", icon: CalendarClock },
   { id: "liveMonitor", label: "Live Monitor", icon: Activity },
   { id: "insights", label: "Insights", icon: Radar },
@@ -9,53 +20,124 @@ const navItems = [
   { id: "history", label: "History", icon: History }
 ];
 
-export default function Sidebar({ activeTab, onTabChange, onLogout, user }) {
+function Sidebar({ activeTab, onTabChange, onLogout, user }) {
+  const [mobileTooltipId, setMobileTooltipId] = useState("");
+  const longPressTimerRef = useRef(null);
+  const hideTooltipTimerRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (longPressTimerRef.current) {
+        window.clearTimeout(longPressTimerRef.current);
+      }
+      if (hideTooltipTimerRef.current) {
+        window.clearTimeout(hideTooltipTimerRef.current);
+      }
+    };
+  }, []);
+
+  function clearTooltipTimers() {
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    if (hideTooltipTimerRef.current) {
+      window.clearTimeout(hideTooltipTimerRef.current);
+      hideTooltipTimerRef.current = null;
+    }
+  }
+
+  function handleMobileTouchStart(itemId) {
+    clearTooltipTimers();
+    longPressTimerRef.current = window.setTimeout(() => {
+      setMobileTooltipId(itemId);
+    }, 320);
+  }
+
+  function handleMobileTouchEnd() {
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+
+    hideTooltipTimerRef.current = window.setTimeout(() => {
+      setMobileTooltipId("");
+    }, 140);
+  }
+
+  function handleMobileTouchCancel() {
+    clearTooltipTimers();
+    setMobileTooltipId("");
+  }
+
+  function handleTabChange(tabId) {
+    setMobileTooltipId("");
+    onTabChange(tabId);
+  }
+
   return (
     <>
-      <aside className="glass-panel fade-rise hidden h-full flex-col rounded-2xl p-4 md:p-5 lg:flex">
-        <div className="border-b border-white/10 pb-4">
-          <p className="text-xs uppercase tracking-[0.26em]" style={{ color: "var(--accent)" }}>
-            InstaFlow Pro
-          </p>
-          <h2 className="mt-2 text-xl font-bold font-display">Admin Console</h2>
-          <p className="muted-text mt-1 truncate text-xs">{user?.email}</p>
+      <header className="glass-panel top-float-nav fade-rise rounded-2xl px-3 py-3 lg:hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-[0.26em]" style={{ color: "var(--accent)" }}>
+              InstaFlow Pro
+            </p>
+            <p className="muted-text mt-1 truncate text-xs">{user?.email}</p>
+          </div>
+
+          <button
+            onClick={onLogout}
+            className="ghost-btn muted-text inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs transition hover:border-red-400/30 hover:text-red-500"
+          >
+            <LogOut size={14} />
+            Logout
+          </button>
+        </div>
+      </header>
+
+      <header className="glass-panel top-float-nav top-orb-nav fade-rise hidden rounded-2xl px-3 py-3 md:px-4 lg:block">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-[0.26em]" style={{ color: "var(--accent)" }}>
+              InstaFlow Pro
+            </p>
+            <p className="muted-text mt-1 truncate text-xs">{user?.email}</p>
+          </div>
+
+          <button
+            onClick={onLogout}
+            className="ghost-btn muted-text inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs transition hover:border-red-400/30 hover:text-red-500"
+          >
+            <LogOut size={14} />
+            Logout
+          </button>
         </div>
 
-        <nav className="mt-6 flex flex-1 flex-col gap-2">
+        <nav className="orb-nav-track mt-3" aria-label="Primary navigation">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = activeTab === item.id;
+
             return (
               <button
                 key={item.id}
-                onClick={() => onTabChange(item.id)}
-                className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${
-                  active ? "text-white" : "muted-text ghost-btn hover:text-slate-900"
-                }`}
-                style={
-                  active
-                    ? {
-                        background: "linear-gradient(140deg, rgba(53, 214, 232, 0.3), rgba(45, 141, 255, 0.3))",
-                        boxShadow: "inset 0 0 0 1px rgba(53, 214, 232, 0.48), 0 10px 20px var(--accent-shadow)"
-                      }
-                    : undefined
-                }
+                type="button"
+                onClick={() => handleTabChange(item.id)}
+                className={`orb-nav-item ${active ? "is-active" : ""}`}
+                aria-label={item.label}
+                title={item.label}
               >
-                <Icon size={17} className={active ? "text-white" : "group-hover:text-slate-900"} />
-                {item.label}
+                <span className="orb-core">
+                  <Icon size={16} />
+                </span>
+                <span className="orb-label">{item.label}</span>
+                <span className="nav-tooltip">{item.label}</span>
               </button>
             );
           })}
         </nav>
-
-        <button
-          onClick={onLogout}
-          className="ghost-btn muted-text flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm transition hover:border-red-400/30 hover:text-red-300"
-        >
-          <LogOut size={16} />
-          Logout
-        </button>
-      </aside>
+      </header>
 
       <nav className="mobile-dock lg:hidden" aria-label="Mobile navigation">
         {navItems.map((item) => {
@@ -66,8 +148,14 @@ export default function Sidebar({ activeTab, onTabChange, onLogout, user }) {
             <button
               key={item.id}
               type="button"
-              onClick={() => onTabChange(item.id)}
-              className={`mobile-dock-item ${active ? "active" : ""}`}
+              onClick={() => handleTabChange(item.id)}
+              onTouchStart={() => handleMobileTouchStart(item.id)}
+              onTouchEnd={handleMobileTouchEnd}
+              onTouchCancel={handleMobileTouchCancel}
+              onTouchMove={handleMobileTouchCancel}
+              className={`mobile-dock-item ${active ? "active" : ""} ${
+                mobileTooltipId === item.id ? "show-tooltip" : ""
+              }`}
               aria-label={item.label}
               title={item.label}
             >
@@ -75,6 +163,7 @@ export default function Sidebar({ activeTab, onTabChange, onLogout, user }) {
                 <Icon size={16} />
               </span>
               <span className="mobile-dock-label">{item.label}</span>
+              <span className="nav-tooltip">{item.label}</span>
             </button>
           );
         })}
@@ -82,3 +171,5 @@ export default function Sidebar({ activeTab, onTabChange, onLogout, user }) {
     </>
   );
 }
+
+export default memo(Sidebar);

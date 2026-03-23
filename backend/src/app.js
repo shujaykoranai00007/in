@@ -21,13 +21,30 @@ const allowedOrigins = new Set([
   "http://localhost:5174"
 ]);
 
+function isTrustedHostedOrigin(origin = "") {
+  if (!origin) {
+    return false;
+  }
+
+  try {
+    const { hostname, protocol } = new URL(origin);
+    if (protocol !== "https:") {
+      return false;
+    }
+
+    return hostname.endsWith(".onrender.com") || hostname.endsWith(".vercel.app") || hostname.endsWith(".netlify.app");
+  } catch {
+    return false;
+  }
+}
+
 const app = express();
 
 app.use(
   cors({
     origin(origin, callback) {
       // Allow same-origin or non-browser requests (no Origin header)
-      if (!origin || allowedOrigins.has(origin)) {
+      if (!origin || allowedOrigins.has(origin) || isTrustedHostedOrigin(origin)) {
         callback(null, true);
         return;
       }

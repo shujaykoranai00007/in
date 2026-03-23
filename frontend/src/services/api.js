@@ -2,6 +2,20 @@ import axios from "axios";
 
 function resolveApiBaseUrl() {
   const envBase = import.meta.env.VITE_API_URL;
+  const isLocalhost = typeof window !== "undefined" && window.location.hostname === "localhost";
+
+  if (isLocalhost) {
+    const envLooksLocal =
+      typeof envBase === "string" &&
+      (envBase.startsWith("http://localhost:") || envBase.startsWith("http://127.0.0.1:"));
+
+    if (envLooksLocal) {
+      return envBase;
+    }
+
+    return "http://localhost:5000/api";
+  }
+
   if (envBase) {
     return envBase;
   }

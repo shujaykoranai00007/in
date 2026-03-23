@@ -2,13 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   AlertTriangle,
-  CheckCircle2,
-  Clock3,
   Download,
   Film,
   Image,
   Link2,
-  LogOut,
   Plus,
   Trash2,
   Upload
@@ -43,6 +40,198 @@ function formatBytes(bytes) {
   return `${amount.toFixed(amount >= 10 ? 0 : 1)} ${units[exponent]}`;
 }
 
+function summarizeErrorLog(errorLog, maxLength = 96) {
+  const raw = String(errorLog || "").replace(/\s+/g, " ").trim();
+  if (!raw) {
+    return "-";
+  }
+
+  // Prevent oversized serialized stream/object payloads from breaking mobile tables.
+  if (
+    raw.includes("_writeState") ||
+    raw.includes("_readableState") ||
+    raw.includes('"type":"Buffer"')
+  ) {
+    return "Media upload failed. Check connection/public URL and retry.";
+  }
+
+  let compact = raw;
+  if (raw.startsWith("{") || raw.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(raw);
+      const nestedMessage =
+        parsed?.error?.message ||
+        parsed?.message ||
+        parsed?.error_description ||
+        parsed?.details;
+
+      if (typeof nestedMessage === "string" && nestedMessage.trim()) {
+        compact = nestedMessage.trim();
+      }
+    } catch {
+      // Keep original text if JSON parsing fails.
+    }
+  }
+
+  if (compact.length <= maxLength) {
+    return compact;
+  }
+
+  return `${compact.slice(0, maxLength - 3)}...`;
+}
+
+function arePostListsEqual(previous = [], next = []) {
+  if (previous === next) {
+    return true;
+  }
+
+  if (!Array.isArray(previous) || !Array.isArray(next) || previous.length !== next.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previous.length; index += 1) {
+    const prevItem = previous[index] || {};
+    const nextItem = next[index] || {};
+
+    if (
+      prevItem._id !== nextItem._id ||
+      prevItem.status !== nextItem.status ||
+      prevItem.updatedAt !== nextItem.updatedAt ||
+      prevItem.scheduledTime !== nextItem.scheduledTime ||
+      prevItem.attempts !== nextItem.attempts ||
+      prevItem.localMediaDeletedAt !== nextItem.localMediaDeletedAt ||
+      prevItem.errorLog !== nextItem.errorLog
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+const CUSTOM_THEME_STORAGE_KEY = "instaflow_custom_theme_v1";
+const ACTIVE_THEME_STORAGE_KEY = "instaflow_active_theme_v1";
+
+const DEFAULT_CUSTOM_THEME = {
+  bgBase: "#edf5ff",
+  tintA: "#13e0b5",
+  tintB: "#ff9c41",
+  panelBg: "#f5fbff",
+  panelBorder: "#2f8cbc",
+  textMuted: "#37526a",
+  accent: "#00a7cc",
+  accentStrong: "#35e0b8",
+  danger: "#ff5a6f"
+};
+
+const CUSTOM_THEME_COMBOS = [
+  {
+    label: "Cyber Ice",
+    colors: {
+      bgBase: "#edf5ff",
+      tintA: "#17d0ff",
+      tintB: "#63ffe4",
+      panelBg: "#f3fbff",
+      panelBorder: "#2f89bc",
+      textMuted: "#36526a",
+      accent: "#00a7cc",
+      accentStrong: "#35e0b8",
+      danger: "#ff5a6f"
+    }
+  },
+  {
+    label: "Volt Purple",
+    colors: {
+      bgBase: "#f2eeff",
+      tintA: "#8a6bff",
+      tintB: "#f24bff",
+      panelBg: "#f7f3ff",
+      panelBorder: "#7a60d6",
+      textMuted: "#4e3f7f",
+      accent: "#7e57ff",
+      accentStrong: "#c94bff",
+      danger: "#ff4f85"
+    }
+  },
+  {
+    label: "Lava Pop",
+    colors: {
+      bgBase: "#fff1e8",
+      tintA: "#ff7a24",
+      tintB: "#ffcf3f",
+      panelBg: "#fff6ee",
+      panelBorder: "#d6863d",
+      textMuted: "#6f4a31",
+      accent: "#ff7a24",
+      accentStrong: "#ffb347",
+      danger: "#ff4e62"
+    }
+  },
+  {
+    label: "Neon Forest",
+    colors: {
+      bgBase: "#ebfff8",
+      tintA: "#00d09f",
+      tintB: "#00b9ff",
+      panelBg: "#f2fffb",
+      panelBorder: "#27a58f",
+      textMuted: "#2f5f64",
+      accent: "#00a39e",
+      accentStrong: "#33d2c5",
+      danger: "#ff4b6e"
+    }
+  },
+  {
+    label: "Midnight Mint",
+    colors: {
+      bgBase: "#e9f1ff",
+      tintA: "#2f67ff",
+      tintB: "#2fe4b9",
+      panelBg: "#f2f7ff",
+      panelBorder: "#4a7cd2",
+      textMuted: "#334f71",
+      accent: "#2f67ff",
+      accentStrong: "#2fe4b9",
+      danger: "#ff5b73"
+    }
+  }
+];
+
+function readStoredActiveTheme() {
+  if (typeof window === "undefined") {
+    return "aurora";
+  }
+
+  const stored = window.localStorage.getItem(ACTIVE_THEME_STORAGE_KEY);
+  return stored || "aurora";
+}
+
+function readStoredCustomTheme() {
+  if (typeof window === "undefined") {
+    return DEFAULT_CUSTOM_THEME;
+  }
+
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(CUSTOM_THEME_STORAGE_KEY) || "{}");
+    return { ...DEFAULT_CUSTOM_THEME, ...stored };
+  } catch {
+    return DEFAULT_CUSTOM_THEME;
+  }
+}
+
+function hexToRgba(hex, alpha) {
+  const value = String(hex || "").trim();
+  const normalized = value.startsWith("#") ? value.slice(1) : value;
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) {
+    return `rgba(0, 167, 204, ${alpha})`;
+  }
+
+  const r = Number.parseInt(normalized.slice(0, 2), 16);
+  const g = Number.parseInt(normalized.slice(2, 4), 16);
+  const b = Number.parseInt(normalized.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 export default function DashboardView({ user, onLogout, instagramStatus }) {
   const POLL_INTERVAL_MS = 10000;
   const TOAST_TTL_MS = 12000;
@@ -55,7 +244,8 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
   const [autoAnimeMessage, setAutoAnimeMessage] = useState("");
   const [newTimeSlot, setNewTimeSlot] = useState("");
 
-  const [theme, setTheme] = useState("aurora");
+  const [theme, setTheme] = useState(readStoredActiveTheme);
+  const [customTheme, setCustomTheme] = useState(readStoredCustomTheme);
   const [activeTab, setActiveTab] = useState("schedule");
   const [postType, setPostType] = useState("reel");
   const [caption, setCaption] = useState("");
@@ -86,6 +276,9 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
   const [postCancelInProgress, setPostCancelInProgress] = useState({});
   const previousStatusByIdRef = useRef(new Map());
   const hasHydratedStatusesRef = useRef(false);
+  const postsLoadInFlightRef = useRef(false);
+  const autoAnimeLoadInFlightRef = useRef(false);
+  const instagramDetailsLoadInFlightRef = useRef(false);
 
   // Instagram URL extraction
   const [inputMode, setInputMode] = useState("upload"); // "upload" | "direct" | "instagram"
@@ -93,6 +286,37 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
   const [extracting, setExtracting] = useState(false);
   const [autoPostingFromLink, setAutoPostingFromLink] = useState(false);
   const [extractError, setExtractError] = useState("");
+
+  const queueSnapshot = useMemo(() => {
+    let pendingCount = 0;
+    let processingCount = 0;
+
+    for (const post of pendingPosts) {
+      if (post.status === "pending") {
+        pendingCount += 1;
+      }
+
+      if (post.status === "processing") {
+        processingCount += 1;
+      }
+    }
+
+    let failedCount = 0;
+    for (const post of history) {
+      if (post.status === "failed") {
+        failedCount += 1;
+      }
+    }
+
+    return { pendingCount, processingCount, failedCount };
+  }, [pendingPosts, history]);
+
+  const activityFeedPreview = useMemo(() => activityFeed.slice(0, 8), [activityFeed]);
+
+  const historyView = useMemo(
+    () => history.map((post) => ({ ...post, summarizedError: summarizeErrorLog(post.errorLog) })),
+    [history]
+  );
 
   function getPostLabel(post = {}) {
     if (post.postType === "reel") {
@@ -153,46 +377,36 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
     }
   }
 
-  const stats = useMemo(
-    () => [
-      {
-        label: "Pending",
-        value: pendingPosts.filter((p) => ["pending", "processing"].includes(p.status)).length,
-        icon: Clock3,
-        tone: "text-amber-300"
-      },
-      {
-        label: "Posted",
-        value: history.filter((p) => p.status === "posted").length,
-        icon: CheckCircle2,
-        tone: "text-emerald-300"
-      },
-      {
-        label: "Failed",
-        value: history.filter((p) => p.status === "failed").length,
-        icon: AlertTriangle,
-        tone: "text-red-300"
-      }
-    ],
-    [pendingPosts, history]
-  );
-
   async function loadPosts({ silent = false } = {}) {
+    if (postsLoadInFlightRef.current) {
+      return;
+    }
+
+    postsLoadInFlightRef.current = true;
+
     try {
       const [{ data: pending }, { data: allHistory }] = await Promise.all([
         api.get("/posts?status=pending,processing&limit=200"),
         api.get("/posts/history")
       ]);
-      setPendingPosts(pending);
-      setHistory(allHistory);
+      setPendingPosts((previous) => (arePostListsEqual(previous, pending) ? previous : pending));
+      setHistory((previous) => (arePostListsEqual(previous, allHistory) ? previous : allHistory));
     } catch (error) {
       if (!silent) {
         setMessage(error?.response?.data?.message || "Failed to load posts.");
       }
+    } finally {
+      postsLoadInFlightRef.current = false;
     }
   }
 
   async function loadAutoAnimeConfig({ silent = false } = {}) {
+    if (autoAnimeLoadInFlightRef.current) {
+      return;
+    }
+
+    autoAnimeLoadInFlightRef.current = true;
+
     if (!silent) {
       setAutoAnimeLoading(true);
     }
@@ -205,6 +419,8 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
         setAutoAnimeMessage(error?.response?.data?.message || "Failed to load anime automation settings.");
       }
     } finally {
+      autoAnimeLoadInFlightRef.current = false;
+
       if (!silent) {
         setAutoAnimeLoading(false);
       }
@@ -318,6 +534,12 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
   }, []);
 
   async function loadInstagramDetails({ silent = false } = {}) {
+    if (instagramDetailsLoadInFlightRef.current) {
+      return;
+    }
+
+    instagramDetailsLoadInFlightRef.current = true;
+
     if (!silent) {
       setInstagramDetailsLoading(true);
       setInstagramDetailsError("");
@@ -335,6 +557,8 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
         );
       }
     } finally {
+      instagramDetailsLoadInFlightRef.current = false;
+
       if (!silent) {
         setInstagramDetailsLoading(false);
       }
@@ -437,8 +661,47 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
   }, [activeTab, instagramStatus?.valid]);
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-  }, [theme]);
+    document.documentElement.setAttribute("data-theme", theme === "custom" ? "aurora" : theme);
+
+    const root = document.documentElement;
+    const customKeys = [
+      "--bg-base",
+      "--bg-tint-a",
+      "--bg-tint-b",
+      "--panel-bg",
+      "--panel-border",
+      "--text-muted",
+      "--accent",
+      "--accent-strong",
+      "--accent-shadow",
+      "--danger"
+    ];
+
+    if (theme === "custom") {
+      root.style.setProperty("--bg-base", customTheme.bgBase);
+      root.style.setProperty("--bg-tint-a", hexToRgba(customTheme.tintA, 0.2));
+      root.style.setProperty("--bg-tint-b", hexToRgba(customTheme.tintB, 0.18));
+      root.style.setProperty("--panel-bg", hexToRgba(customTheme.panelBg, 0.84));
+      root.style.setProperty("--panel-border", hexToRgba(customTheme.panelBorder, 0.34));
+      root.style.setProperty("--text-muted", customTheme.textMuted);
+      root.style.setProperty("--accent", customTheme.accent);
+      root.style.setProperty("--accent-strong", customTheme.accentStrong);
+      root.style.setProperty("--accent-shadow", hexToRgba(customTheme.accent, 0.3));
+      root.style.setProperty("--danger", customTheme.danger);
+    } else {
+      customKeys.forEach((key) => root.style.removeProperty(key));
+    }
+
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(ACTIVE_THEME_STORAGE_KEY, theme);
+      window.localStorage.setItem(CUSTOM_THEME_STORAGE_KEY, JSON.stringify(customTheme));
+    }
+  }, [theme, customTheme]);
+
+  function applyCustomThemeCombo(combo) {
+    setCustomTheme(combo.colors);
+    setTheme("custom");
+  }
 
   async function submitSchedule(event) {
     event.preventDefault();
@@ -738,8 +1001,8 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
   }, [mediaPreview]);
 
   return (
-    <div className="min-h-screen bg-grid px-4 pb-28 pt-4 text-slate-800 md:px-6 md:py-8 lg:pb-8">
-      <div className="mx-auto grid max-w-7xl gap-5 lg:grid-cols-[260px_1fr]">
+    <div className="min-h-screen bg-grid px-4 pb-28 pt-2 text-slate-800 md:px-6 md:pb-8 md:pt-3 lg:pb-8">
+      <div className="mx-auto flex max-w-7xl flex-col gap-5">
         <Sidebar
           activeTab={activeTab}
           onTabChange={setActiveTab}
@@ -747,27 +1010,10 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
           user={user}
         />
 
-        <main className="space-y-5">
-          <section className="glass-panel flex items-center justify-between rounded-2xl px-4 py-3 lg:hidden">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.2em]" style={{ color: "var(--accent)" }}>
-                InstaFlow Pro
-              </p>
-              <p className="mt-0.5 text-sm font-semibold">@{instagramStatus?.username || "admin"}</p>
-            </div>
-            <button
-              type="button"
-              onClick={onLogout}
-              className="ghost-btn flex items-center gap-2 rounded-xl px-3 py-2 text-xs"
-            >
-              <LogOut size={14} />
-              Logout
-            </button>
-          </section>
-
+        <main className="screen-stack space-y-5">
           {activeTab === "liveMonitor" && (
             <>
-              <section className="glass-panel rounded-2xl px-4 py-4 md:px-5 md:py-5">
+              <section className="glass-panel screen-frame rounded-2xl px-4 py-4 md:px-5 md:py-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="muted-text text-xs uppercase tracking-[0.18em]">Live Queue Monitor</p>
@@ -789,7 +1035,7 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                 </div>
 
                 <div className="mt-4 grid gap-2">
-                  {activityFeed.slice(0, 8).map((event) => (
+                  {activityFeedPreview.map((event) => (
                     <div
                       key={event.id}
                       className={`rounded-xl border px-3 py-2 text-sm ${
@@ -817,81 +1063,110 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                 </div>
               </section>
 
-              <section className="glass-panel rounded-2xl p-4 md:p-5">
+              <section className="glass-panel screen-frame rounded-2xl p-4 md:p-5">
                 <h3 className="text-base font-bold font-display">Queue Snapshot</h3>
                 <div className="mt-3 grid gap-3 sm:grid-cols-3">
                   <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-900">Pending</p>
-                    <p className="mt-1 text-2xl font-bold font-display text-amber-900">{pendingPosts.filter((p) => p.status === "pending").length}</p>
+                    <p className="mt-1 text-2xl font-bold font-display text-amber-900">{queueSnapshot.pendingCount}</p>
                   </div>
                   <div className="rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2">
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-900">Processing</p>
-                    <p className="mt-1 text-2xl font-bold font-display text-cyan-900">{pendingPosts.filter((p) => p.status === "processing").length}</p>
+                    <p className="mt-1 text-2xl font-bold font-display text-cyan-900">{queueSnapshot.processingCount}</p>
                   </div>
                   <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2">
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-red-900">Failed (History)</p>
-                    <p className="mt-1 text-2xl font-bold font-display text-red-900">{history.filter((p) => p.status === "failed").length}</p>
+                    <p className="mt-1 text-2xl font-bold font-display text-red-900">{queueSnapshot.failedCount}</p>
                   </div>
                 </div>
               </section>
             </>
           )}
 
-          {activeTab !== "liveMonitor" && (
-            <section className="glass-panel fade-rise flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-4 md:px-5">
-            <div>
-              <p className="muted-text text-xs uppercase tracking-[0.2em]">Control Center</p>
-              <h3 className="text-lg font-bold font-display">Campaign Scheduler</h3>
-              <p className="muted-text mt-1 text-xs">Manage upload source, schedule timing, and publishing health.</p>
-            </div>
-            <div className="flex items-center gap-2">
-              {[
-                { key: "aurora", label: "Aurora" },
-                { key: "sunset", label: "Sunset" },
-                { key: "ocean", label: "Ocean" }
-              ].map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => setTheme(item.key)}
-                  className={`theme-chip rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                    theme === item.key ? "active" : "text-slate-700"
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </section>
+          {activeTab === "controlCenter" && (
+            <section className="glass-panel screen-frame fade-rise rounded-2xl px-4 py-4 md:px-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="muted-text text-xs uppercase tracking-[0.2em]">Control Center</p>
+                  <h3 className="text-lg font-bold font-display">Theme Lab</h3>
+                  <p className="muted-text mt-1 text-xs">Choose preset themes or build your own full color combination.</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {[
+                    { key: "aurora", label: "Aurora" },
+                    { key: "sunset", label: "Sunset" },
+                    { key: "ocean", label: "Ocean" },
+                    { key: "custom", label: "Custom" }
+                  ].map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => setTheme(item.key)}
+                      className={`theme-chip rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                        theme === item.key ? "active" : "text-slate-700"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-xl border border-slate-200/70 bg-white/70 p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">Quick Color Combinations</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {CUSTOM_THEME_COMBOS.map((combo) => (
+                    <button
+                      key={combo.label}
+                      type="button"
+                      onClick={() => applyCustomThemeCombo(combo)}
+                      className="ghost-btn flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-left"
+                    >
+                      <span className="text-xs font-semibold text-slate-700">{combo.label}</span>
+                      <span className="flex items-center gap-1">
+                        <span className="h-3 w-3 rounded-full border border-white" style={{ backgroundColor: combo.colors.accent }} />
+                        <span className="h-3 w-3 rounded-full border border-white" style={{ backgroundColor: combo.colors.accentStrong }} />
+                        <span className="h-3 w-3 rounded-full border border-white" style={{ backgroundColor: combo.colors.tintB }} />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-xl border border-slate-200/70 bg-white/70 p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">Custom Color Builder</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {[
+                    ["bgBase", "Background Base"],
+                    ["tintA", "Glow Tint A"],
+                    ["tintB", "Glow Tint B"],
+                    ["panelBg", "Panel Background"],
+                    ["panelBorder", "Panel Border"],
+                    ["textMuted", "Muted Text"],
+                    ["accent", "Accent"],
+                    ["accentStrong", "Accent Strong"],
+                    ["danger", "Danger"]
+                  ].map(([key, label]) => (
+                    <label key={key} className="rounded-lg border border-slate-200 bg-white/80 px-2 py-2 text-xs font-semibold text-slate-600">
+                      <span>{label}</span>
+                      <input
+                        type="color"
+                        value={customTheme[key]}
+                        onChange={(event) => {
+                          setCustomTheme((prev) => ({ ...prev, [key]: event.target.value }));
+                          setTheme("custom");
+                        }}
+                        className="mt-2 h-9 w-full cursor-pointer rounded-md border border-slate-200 bg-transparent"
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </section>
           )}
 
-          {activeTab !== "liveMonitor" && (
-            <section className="grid gap-4 md:grid-cols-3">
-            {stats.map((item) => {
-              const Icon = item.icon;
-              return (
-                <motion.article
-                  key={item.label}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4 }}
-                  className="glass-panel rounded-2xl p-4"
-                >
-                  <p className="text-sm text-muted">{item.label}</p>
-                  <div className="mt-3 flex items-center justify-between">
-                    <h3 className="text-3xl font-bold font-display">{item.value}</h3>
-                    <span className="status-pill">
-                      <Icon className={item.tone} size={16} />
-                    </span>
-                  </div>
-                </motion.article>
-              );
-            })}
-          </section>
-          )}
-
-          {activeTab !== "liveMonitor" && instagramStatus?.valid && (
-            <section className="glass-panel rounded-2xl border border-emerald-400/40 bg-emerald-100/75 px-4 py-3 text-sm text-emerald-900">
+          {activeTab === "controlCenter" && instagramStatus?.valid && (
+            <section className="glass-panel screen-frame rounded-2xl border border-emerald-400/40 bg-emerald-100/75 px-4 py-3 text-sm text-emerald-900">
               Instagram token connected{instagramStatus.username ? ` as @${instagramStatus.username}` : ""}.
             </section>
           )}
@@ -1320,7 +1595,7 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
           )}
 
           {activeTab === "animeAutomation" && (
-            <section className="glass-panel animate-floatIn rounded-2xl p-5 md:p-6">
+            <section className="glass-panel screen-frame animate-floatIn rounded-2xl p-5 md:p-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h3 className="text-xl font-bold font-display">Anime Auto Mode</h3>
@@ -1564,7 +1839,7 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
           )}
 
           {activeTab === "pending" && (
-            <section className="glass-panel animate-floatIn rounded-2xl p-5">
+            <section className="glass-panel screen-frame animate-floatIn rounded-2xl p-5">
               <h3 className="text-xl font-bold font-display">Scheduled Queue</h3>
 
               <div className="mt-4 space-y-3 md:hidden">
@@ -1694,11 +1969,11 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
           )}
 
           {activeTab === "history" && (
-            <section className="glass-panel animate-floatIn rounded-2xl p-5">
+            <section className="glass-panel screen-frame animate-floatIn rounded-2xl p-5">
               <h3 className="text-xl font-bold font-display">Posting History</h3>
 
               <div className="mt-4 space-y-3 md:hidden">
-                {history.map((post) => (
+                {historyView.map((post) => (
                   <article key={post._id} className="rounded-xl border border-slate-200 bg-white/85 p-3 shadow-sm">
                     <div className="flex items-start justify-between gap-2">
                       <span className="status-pill inline-flex items-center gap-1 bg-slate-100 text-slate-700">
@@ -1751,7 +2026,9 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                     </div>
 
                     {post.errorLog && (
-                      <p className="mt-2 line-clamp-2 rounded-lg bg-red-50 px-2.5 py-2 text-xs text-red-700">{post.errorLog}</p>
+                      <p className="mt-2 line-clamp-2 break-words rounded-lg bg-red-50 px-2.5 py-2 text-xs text-red-700" title={post.errorLog}>
+                        {post.summarizedError.length > 120 ? `${post.summarizedError.slice(0, 117)}...` : post.summarizedError}
+                      </p>
                     )}
                   </article>
                 ))}
@@ -1776,7 +2053,7 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {history.map((post) => (
+                    {historyView.map((post) => (
                       <tr key={post._id} className="border-b border-white/5 transition hover:bg-white/[0.03]">
                         <td className="py-3 pr-4">{post.postType}</td>
                         <td className="py-3 pr-4">{formatDate(post.updatedAt)}</td>
@@ -1796,7 +2073,9 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                             {post.status}
                           </span>
                         </td>
-                        <td className="max-w-xs truncate py-3 text-muted">{post.errorLog || "-"}</td>
+                        <td className="max-w-xs truncate py-3 text-muted" title={post.errorLog || ""}>
+                          {post.summarizedError}
+                        </td>
                         <td className="py-3">
                           <div className="flex items-center gap-2">
                             <button

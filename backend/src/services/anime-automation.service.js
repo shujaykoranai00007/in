@@ -659,6 +659,10 @@ function toPublicConfig(config) {
     keywordSets: config.keywordSets,
     timeSlots: config.timeSlots,
     timezone: config.timezone,
+    continuousSearchEnabled: Boolean(config.continuousSearchEnabled),
+    continuousSearchContentType: config.continuousSearchContentType || "reel",
+    continuousSearchRequestedAt: config.continuousSearchRequestedAt || null,
+    continuousSearchLastAttemptAt: config.continuousSearchLastAttemptAt || null,
     updatedAt: config.updatedAt
   };
 }
@@ -890,13 +894,21 @@ export async function updateAutoAnimeConfig(payload) {
   return toPublicConfig(config);
 }
 
-export async function runAutoAnimeNow() {
+export async function runAutoAnimeNow(options = {}) {
   const config = await ensureConfig();
+  const trigger = options?.trigger === "scheduler" ? "scheduler" : "manual";
   const noUsablePublicBaseUrl = !hasUsablePublicBaseUrl();
   const requestedContentType = String(config.contentType || "reel").toLowerCase();
 
   // In reel-only mode, never silently downgrade to image posts.
   if (noUsablePublicBaseUrl && requestedContentType === "reel") {
+    if (config.continuousSearchEnabled) {
+      config.continuousSearchEnabled = false;
+      config.continuousSearchRequestedAt = null;
+      config.continuousSearchLastAttemptAt = new Date();
+      await config.save();
+    }
+
     return {
       queued: false,
       message:
@@ -961,6 +973,30 @@ export async function runAutoAnimeNow() {
         };
       }
 
+      if (requestedContentType === "reel") {
+        if (!config.continuousSearchEnabled) {
+          config.continuousSearchEnabled = true;
+          config.continuousSearchContentType = "reel";
+          config.continuousSearchRequestedAt = new Date();
+        }
+
+        config.continuousSearchLastAttemptAt = new Date();
+        await config.save();
+
+        if (trigger === "manual") {
+          return {
+            queued: false,
+            message:
+              "Abhi reel nahi mili. Continuous search ON ho gaya hai, system har minute reel dhoondhega aur milte hi queue karega."
+          };
+        }
+
+        return {
+          queued: false,
+          message: "Continuous reel search active: still looking for a publishable reel."
+        };
+      }
+
       return {
         queued: false,
         message: "No publishable anime media found now (Reddit may be rate-limited). Try again in a few minutes."
@@ -993,6 +1029,11 @@ export async function runAutoAnimeNow() {
   config.hashtagSetCursor = rotating.nextCursor;
   config.keywordSets = rotatingKeywords.sets;
   config.keywordSetCursor = rotatingKeywords.nextCursor;
+  if (config.continuousSearchEnabled && (candidate.postType || "reel") === "reel") {
+    config.continuousSearchEnabled = false;
+    config.continuousSearchRequestedAt = null;
+  }
+  config.continuousSearchLastAttemptAt = new Date();
   await config.save();
 
   return {
@@ -1007,6 +1048,19 @@ export async function runAutoAnimeNow() {
 
 export async function processAutoAnimeSchedule(now = new Date()) {
   const config = await ensureConfig();
+
+  if (
+    config.continuousSearchEnabled &&
+    String(config.continuousSearchContentType || "reel").toLowerCase() === "reel"
+  ) {
+    const result = await runAutoAnimeNow({ trigger: "scheduler" });
+    return {
+      triggered: true,
+      slot: null,
+      queued: result.queued,
+      message: result.message || "Continuous reel search attempt completed"
+    };
+  }
 
   if (!config.enabled) {
     return { triggered: false, reason: "disabled" };

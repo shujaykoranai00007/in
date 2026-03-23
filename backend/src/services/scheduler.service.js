@@ -53,6 +53,22 @@ function isRetryableInstagramError(error) {
   return true;
 }
 
+function extractFailureMessage(error) {
+  const responseError = error?.response?.data?.error;
+  if (responseError?.message) {
+    const codeText = responseError.code ? ` (code ${responseError.code})` : "";
+    return `${responseError.message}${codeText}`;
+  }
+
+  const responseData = error?.response?.data;
+  if (typeof responseData === "string" && responseData.trim()) {
+    return responseData.length > 500 ? `${responseData.slice(0, 500)}...` : responseData;
+  }
+
+  const fallback = String(error?.message || "Unknown upload error").trim();
+  return fallback.length > 500 ? `${fallback.slice(0, 500)}...` : fallback;
+}
+
 async function uploadOnce(post) {
   try {
     const result = await publishPost(post);
@@ -165,9 +181,7 @@ export async function processPendingPosts() {
       continue;
     }
 
-    const failureMessage = uploadResult.error?.response?.data
-      ? JSON.stringify(uploadResult.error.response.data)
-      : uploadResult.error?.message || "Unknown upload error";
+    const failureMessage = extractFailureMessage(uploadResult.error);
 
     // Build user-friendly error message
     let displayError = failureMessage;

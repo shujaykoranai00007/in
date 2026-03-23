@@ -102,6 +102,23 @@ const autoAnimeConfigSchema = new mongoose.Schema(
     recentSourceIds: {
       type: [String],
       default: []
+    },
+    continuousSearchEnabled: {
+      type: Boolean,
+      default: false
+    },
+    continuousSearchContentType: {
+      type: String,
+      enum: ["reel", "post", "both"],
+      default: "reel"
+    },
+    continuousSearchRequestedAt: {
+      type: Date,
+      default: null
+    },
+    continuousSearchLastAttemptAt: {
+      type: Date,
+      default: null
     }
   },
   { timestamps: true }
