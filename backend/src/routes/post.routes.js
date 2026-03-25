@@ -46,6 +46,34 @@ function looksLikeVideoUrl(url = "") {
   return value.includes(".mp4") || value.includes("video") || value.includes("/reel/");
 }
 
+function isImageInsteadOfReelError(error) {
+  const msg = String(error?.message || "").toLowerCase();
+  return msg.includes("resolved to an image post") || msg.includes("not a reel video");
+}
+
+async function extractMediaWithTypeFallback(sourceUrl, requestedPostType) {
+  const wantsReel = String(requestedPostType || "").toLowerCase() === "reel";
+
+  try {
+    const extracted = await extractMediaFromUrl(sourceUrl, { preferVideo: wantsReel });
+    return {
+      extracted,
+      postType: wantsReel ? "reel" : extracted?.postType === "post" ? "post" : "reel"
+    };
+  } catch (error) {
+    if (!wantsReel || !isImageInsteadOfReelError(error)) {
+      throw error;
+    }
+
+    // Graceful fallback: if URL resolves to image content, continue as image post.
+    const extracted = await extractMediaFromUrl(sourceUrl, { preferVideo: false });
+    return {
+      extracted,
+      postType: extracted?.postType === "post" ? "post" : "reel"
+    };
+  }
+}
+
 async function hasVideoTrack(filePath) {
   if (!ffmpegPath) {
     throw new Error("ffmpeg binary is not available on server.");
@@ -244,8 +272,8 @@ postRouter.post("/extract-url", async (req, res, next) => {
       return res.status(400).json({ message: "sourceUrl is required" });
     }
 
-    const wantsReel = String(requestedPostType || "").toLowerCase() === "reel";
-    const result = await extractMediaFromUrl(sourceUrl, { preferVideo: wantsReel });
+    const { extracted } = await extractMediaWithTypeFallback(sourceUrl, requestedPostType);
+    const result = extracted;
     return res.json(result);
   } catch (error) {
     return res.status(422).json({
@@ -261,16 +289,14 @@ postRouter.post("/from-link/auto", async (req, res, next) => {
       return res.status(400).json({ message: "sourceUrl is required" });
     }
 
-    const wantsReel = String(requestedPostType || "").toLowerCase() === "reel";
-    const extracted = await extractMediaFromUrl(sourceUrl, { preferVideo: wantsReel });
+    const { extracted, postType } = await extractMediaWithTypeFallback(sourceUrl, requestedPostType);
     if (!extracted?.mediaUrl) {
       return res.status(422).json({
         message: "Could not extract downloadable media from this URL. Try Upload File for guaranteed results."
       });
     }
 
-    const postType = wantsReel ? "reel" : extracted.postType === "post" ? "post" : "reel";
-    if (wantsReel && !looksLikeVideoUrl(extracted.mediaUrl)) {
+    if (postType === "reel" && !looksLikeVideoUrl(extracted.mediaUrl)) {
       return res.status(422).json({
         message: "Reel mode requires a real video source URL. This link resolved to image content."
       });
@@ -334,16 +360,14 @@ postRouter.post("/from-link/schedule", async (req, res, next) => {
       return res.status(400).json({ message: "scheduledTime must be a valid datetime" });
     }
 
-    const wantsReel = String(requestedPostType || "").toLowerCase() === "reel";
-    const extracted = await extractMediaFromUrl(sourceUrl, { preferVideo: wantsReel });
+    const { extracted, postType } = await extractMediaWithTypeFallback(sourceUrl, requestedPostType);
     if (!extracted?.mediaUrl) {
       return res.status(422).json({
         message: "Could not extract downloadable media from this URL. Try Upload File for guaranteed results."
       });
     }
 
-    const postType = wantsReel ? "reel" : extracted.postType === "post" ? "post" : "reel";
-    if (wantsReel && !looksLikeVideoUrl(extracted.mediaUrl)) {
+    if (postType === "reel" && !looksLikeVideoUrl(extracted.mediaUrl)) {
       return res.status(422).json({
         message: "Reel mode requires a real video source URL. This link resolved to image content."
       });

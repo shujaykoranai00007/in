@@ -841,7 +841,9 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
         postType
       });
       setMediaUrl(data.mediaUrl);
-      setPostType((current) => (current === "reel" ? "reel" : data.postType));
+      if (data?.postType === "reel" || data?.postType === "post") {
+        setPostType(data.postType);
+      }
       if (data.caption) setCaption(data.caption);
     } catch (err) {
       const rawMessage =
@@ -894,6 +896,10 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
 
       if (data?.post?.mediaUrl) {
         setMediaUrl(data.post.mediaUrl);
+      }
+
+      if (data?.post?.postType === "reel" || data?.post?.postType === "post") {
+        setPostType(data.post.postType);
       }
 
       await loadPosts();
