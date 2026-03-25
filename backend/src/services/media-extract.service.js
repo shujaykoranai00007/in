@@ -292,6 +292,29 @@ function extractVideoFromRawMarkup(html) {
   return "";
 }
 
+function detectInstagramAccessIssue(html = "") {
+  const text = String(html || "").toLowerCase();
+
+  if (
+    text.includes("post isn't available") ||
+    text.includes("post isn\u2019t available") ||
+    text.includes("the link may be broken") ||
+    text.includes("page isn't available")
+  ) {
+    return "This Instagram post is unavailable (deleted, private, or invalid URL). Open the link in browser and make sure it is public.";
+  }
+
+  if (text.includes("this account is private") || text.includes("private account")) {
+    return "This Instagram account/post is private. Use a public post URL or upload file directly.";
+  }
+
+  if (text.includes("login") && text.includes("instagram")) {
+    return "Instagram requires login/session for this link. Add INSTAGRAM_SESSIONID on backend or use Upload File.";
+  }
+
+  return "";
+}
+
 async function fetchHtml(url, headers = {}) {
   const response = await axios.get(url, {
     headers: buildRequestHeaders(headers),
@@ -411,6 +434,22 @@ export async function extractMediaFromUrl(sourceUrl, options = {}) {
   }
 
   if (!extracted) {
+    try {
+      const sourceHtml = await fetchHtml(normalizedUrl, {
+        "User-Agent": BROWSER_HEADERS["User-Agent"],
+        Accept: "text/html"
+      });
+
+      const accessIssue = detectInstagramAccessIssue(sourceHtml);
+      if (accessIssue) {
+        throw new Error(accessIssue);
+      }
+    } catch (error) {
+      if (error?.message && !String(error.message).toLowerCase().includes("timeout")) {
+        throw error;
+      }
+    }
+
     throw new Error(
       "Could not extract media from this Instagram URL. Instagram may block this link. Use Upload File for guaranteed results."
     );

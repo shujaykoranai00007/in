@@ -899,7 +899,12 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
       await loadPosts();
       setActiveTab("pending");
     } catch (err) {
-      setExtractError(err?.response?.data?.message || "Could not auto-post from this link.");
+      const extractedMessage =
+        err?.response?.data?.message ||
+        (typeof err?.response?.data === "string" ? err.response.data : "") ||
+        err?.message ||
+        "Could not auto-post from this link.";
+      setExtractError(extractedMessage);
     } finally {
       setAutoPostingFromLink(false);
     }
