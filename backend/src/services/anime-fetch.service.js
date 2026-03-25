@@ -2,14 +2,27 @@ import axios from "axios";
 
 const REDDIT_TIMEOUT_MS = 15000;
 const REDDIT_LIMIT = 60;
+const REDDIT_BASE_URLS = [
+  "https://www.reddit.com",
+  "https://api.reddit.com",
+  "https://old.reddit.com"
+];
+const REDDIT_REQUEST_MAX_ATTEMPTS = 2;
 
-const redditClient = axios.create({
-  baseURL: "https://www.reddit.com",
-  timeout: REDDIT_TIMEOUT_MS,
-  headers: {
-    "User-Agent": "InstaFlowScheduler/1.0"
-  }
-});
+function createRedditClient(baseURL) {
+  return axios.create({
+    baseURL,
+    timeout: REDDIT_TIMEOUT_MS,
+    headers: {
+      "User-Agent": "InstaFlowScheduler/1.0 (+https://instaflow.app)",
+      Accept: "application/json"
+    }
+  });
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function normalizeUrl(mediaUrl, { stripQuery = false } = {}) {
   if (!mediaUrl) {
@@ -204,16 +217,44 @@ function extractImageCandidate(post, config) {
 
 async function fetchSubredditFeed(subreddit, sort = "hot") {
   const endpoint = `/r/${encodeURIComponent(subreddit)}/${sort}.json`;
-  const { data } = await redditClient.get(endpoint, {
-    params: {
-      limit: REDDIT_LIMIT,
-      raw_json: 1,
-      t: "day"
-    }
-  });
+  let lastError = null;
 
-  const children = data?.data?.children || [];
-  return children.map((item) => item?.data).filter(Boolean);
+  for (const baseURL of REDDIT_BASE_URLS) {
+    const redditClient = createRedditClient(baseURL);
+
+    for (let attempt = 1; attempt <= REDDIT_REQUEST_MAX_ATTEMPTS; attempt += 1) {
+      try {
+        const { data } = await redditClient.get(endpoint, {
+          params: {
+            limit: REDDIT_LIMIT,
+            raw_json: 1,
+            t: "day"
+          }
+        });
+
+        const children = data?.data?.children || [];
+        const posts = children.map((item) => item?.data).filter(Boolean);
+        if (posts.length) {
+          return posts;
+        }
+
+        break;
+      } catch (error) {
+        lastError = error;
+        const status = Number(error?.response?.status || 0);
+
+        // Retry once for transient issues; then move to next Reddit host.
+        if (attempt < REDDIT_REQUEST_MAX_ATTEMPTS && (status === 429 || status >= 500 || status === 0)) {
+          await delay(350 * attempt);
+          continue;
+        }
+
+        break;
+      }
+    }
+  }
+
+  throw lastError || new Error("Unable to fetch subreddit feed from Reddit");
 }
 
 export async function getRedditAnimeCandidates(config) {
