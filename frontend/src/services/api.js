@@ -11,6 +11,11 @@ function normalizeApiEnvUrl(raw) {
     return "";
   }
 
+  // Allow explicit same-origin API proxy path.
+  if (value.startsWith("/")) {
+    return value.replace(/\/+$/, "") || "/api";
+  }
+
   try {
     const parsed = new URL(value);
     if (!["http:", "https:"].includes(parsed.protocol)) {
@@ -41,8 +46,8 @@ function resolveApiBaseUrl() {
   }
 
   // In hosted/production builds, use the env var injected at build time (e.g. from Vercel).
-  // Fall back to the correct production Render backend.
-  return envBase || "https://instaflow-9nox.onrender.com/api";
+  // Prefer same-origin API proxy in production to avoid CORS and cold-start preflight issues.
+  return envBase || "/api";
 }
 
 const api = axios.create({

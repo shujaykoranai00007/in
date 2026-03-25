@@ -922,6 +922,10 @@ export async function updateAutoAnimeConfig(payload) {
 export async function runAutoAnimeNow(options = {}) {
   const config = await ensureConfig();
   const trigger = options?.trigger === "scheduler" ? "scheduler" : "manual";
+  const queueDelaySeconds =
+    trigger === "manual"
+      ? Math.max(0, Number(options?.queueDelaySeconds) || 45)
+      : 0;
   const noUsablePublicBaseUrl = !hasUsablePublicBaseUrl();
   const requestedContentType = String(config.contentType || "reel").toLowerCase();
 
@@ -1042,7 +1046,7 @@ export async function runAutoAnimeNow(options = {}) {
     mediaUrl: preparedMediaUrl,
     caption: renderCaption(config.captionTemplate, candidate, rotating.text, rotatingKeywords.text),
     postType: candidate.postType || "reel",
-    scheduledTime: new Date(),
+    scheduledTime: new Date(Date.now() + queueDelaySeconds * 1000),
     status: "pending",
     sourcePlatform: candidate.sourcePlatform,
     sourceId: candidate.sourceId,

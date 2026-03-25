@@ -1028,6 +1028,8 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
     };
   }, [mediaPreview]);
 
+  const activeToast = toasts[0] || null;
+
   return (
     <div className="min-h-screen bg-grid px-4 pb-28 pt-2 text-slate-800 md:px-6 md:pb-8 md:pt-3 lg:pb-8">
       <div className="mx-auto flex max-w-7xl flex-col gap-5">
@@ -2143,25 +2145,18 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
         </main>
       </div>
 
-      <div className="pointer-events-none fixed right-4 top-4 z-50 flex w-[min(92vw,360px)] flex-col gap-2">
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            className={`pointer-events-auto fade-rise rounded-xl border px-3 py-2 text-sm shadow-xl ${
-              toast.tone === "success"
-                ? "border-emerald-300/60 bg-emerald-500/90 text-white"
-                : toast.tone === "danger"
-                  ? "border-red-300/60 bg-red-500/90 text-white"
-                  : toast.tone === "warn"
-                    ? "border-amber-300/60 bg-amber-500/90 text-slate-950"
-                    : "border-cyan-300/60 bg-cyan-500/90 text-slate-950"
-            }`}
-          >
-            <p className="font-semibold">{toast.title}</p>
-            {toast.description && <p className="mt-0.5 text-xs opacity-90">{toast.description}</p>}
+      {activeToast && (
+        <div className="dynamic-island-wrap" aria-live="polite" aria-atomic="true">
+          <div className={`dynamic-island fade-rise tone-${activeToast.tone || "info"}`}>
+            <span className="dynamic-island-pulse" />
+            <div className="dynamic-island-copy">
+              <p className="dynamic-island-title">{activeToast.title}</p>
+              {activeToast.description && <p className="dynamic-island-desc">{activeToast.description}</p>}
+            </div>
+            {toasts.length > 1 && <span className="dynamic-island-count">+{toasts.length - 1}</span>}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

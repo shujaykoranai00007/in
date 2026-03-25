@@ -42,13 +42,7 @@ autoAnimeRouter.post("/run-now", async (_req, res, next) => {
       await updateAutoAnimeConfig(payload);
     }
 
-    const result = await runAutoAnimeNow();
-
-    // On hosted environments, trigger queue processing immediately to avoid waiting
-    // for the next cron cycle when dynos/apps are waking up.
-    if (result?.queued) {
-      await processPendingPosts();
-    }
+    const result = await runAutoAnimeNow({ queueDelaySeconds: 45 });
 
     return res.json(result);
   } catch (error) {
