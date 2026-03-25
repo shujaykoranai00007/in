@@ -24,7 +24,25 @@ if (!fs.existsSync(uploadsDir)) {
 }
 
 function getPublicBaseUrl(req) {
-  return process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`;
+  const candidates = [process.env.RENDER_EXTERNAL_URL, process.env.PUBLIC_BASE_URL];
+
+  for (const candidate of candidates) {
+    const value = String(candidate || "").trim();
+    if (!value) {
+      continue;
+    }
+
+    try {
+      const parsed = new URL(value);
+      if (["http:", "https:"].includes(parsed.protocol)) {
+        return parsed.origin;
+      }
+    } catch {
+      // Try next candidate.
+    }
+  }
+
+  return `${req.protocol}://${req.get("host")}`;
 }
 
 function extensionFromUrl(url, fallback = ".bin") {

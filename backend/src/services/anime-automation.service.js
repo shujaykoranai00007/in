@@ -254,12 +254,32 @@ function renderCaption(template, candidate, rotatingHashtagText = "", rotatingKe
 }
 
 function getPublicBaseUrl() {
-  return process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
+  const candidates = [process.env.RENDER_EXTERNAL_URL, process.env.PUBLIC_BASE_URL];
+
+  for (const candidate of candidates) {
+    const value = String(candidate || "").trim();
+    if (!value) {
+      continue;
+    }
+
+    try {
+      const parsed = new URL(value);
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        continue;
+      }
+
+      return parsed.origin;
+    } catch {
+      // Try next candidate.
+    }
+  }
+
+  return `http://localhost:${process.env.PORT || 5000}`;
 }
 
 function hasUsablePublicBaseUrl() {
-  const value = String(process.env.PUBLIC_BASE_URL || "").trim();
-  if (!value) {
+  const value = getPublicBaseUrl();
+  if (!value || value.includes("localhost")) {
     return false;
   }
 
@@ -281,6 +301,11 @@ function hasUsablePublicBaseUrl() {
       if (secondOctet >= 16 && secondOctet <= 31) {
         return false;
       }
+    }
+
+    // Frontend-only hosts typically do not expose backend media files.
+    if (host.endsWith(".vercel.app") || host.endsWith(".netlify.app")) {
+      return false;
     }
 
     return ["http:", "https:"].includes(parsed.protocol);

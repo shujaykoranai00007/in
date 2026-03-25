@@ -85,9 +85,24 @@ function validateInstagramImageUrl(mediaUrl) {
 }
 
 function getPublicBaseUrl() {
-  const configured = String(process.env.PUBLIC_BASE_URL || "").trim();
-  if (configured) {
-    return configured.replace(/\/+$/, "");
+  const candidates = [process.env.RENDER_EXTERNAL_URL, process.env.PUBLIC_BASE_URL];
+
+  for (const candidate of candidates) {
+    const configured = String(candidate || "").trim();
+    if (!configured) {
+      continue;
+    }
+
+    try {
+      const parsed = new URL(configured);
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        continue;
+      }
+
+      return parsed.origin;
+    } catch {
+      // Continue with next candidate.
+    }
   }
 
   return `http://localhost:${env.port || 5000}`;
@@ -112,6 +127,10 @@ function canHostPublicMedia() {
       if (secondOctet >= 16 && secondOctet <= 31) {
         return false;
       }
+    }
+
+    if (host.endsWith(".vercel.app") || host.endsWith(".netlify.app")) {
+      return false;
     }
 
     return ["http:", "https:"].includes(parsed.protocol);
