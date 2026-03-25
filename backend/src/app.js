@@ -51,7 +51,9 @@ app.use(
 
       callback(new Error("Not allowed by CORS"));
     },
-    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"]
+    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"]
   })
 );
 app.use(express.json({ limit: "2mb" }));
