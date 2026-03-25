@@ -40,22 +40,26 @@ function isTrustedHostedOrigin(origin = "") {
 
 const app = express();
 
-app.use(
-  cors({
-    origin(origin, callback) {
-      // Allow same-origin or non-browser requests (no Origin header)
-      if (!origin || allowedOrigins.has(origin) || isTrustedHostedOrigin(origin)) {
-        callback(null, true);
-        return;
-      }
+const corsOptions = {
+  origin(origin, callback) {
+    // Allow same-origin or non-browser requests (no Origin header)
+    if (!origin || allowedOrigins.has(origin) || isTrustedHostedOrigin(origin)) {
+      callback(null, true);
+      return;
+    }
 
-      callback(new Error("Not allowed by CORS"));
-    },
-    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization"]
-  })
-);
+    callback(new Error("Not allowed by CORS"));
+  },
+  methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"]
+};
+
+// Respond to every OPTIONS preflight before any other middleware.
+// This prevents CORS failures when the server wakes up from sleep (Render free tier).
+app.options("*", cors(corsOptions));
+
+app.use(cors(corsOptions));
 app.use(express.json({ limit: "2mb" }));
 
 app.get("/health", (_req, res) => {
