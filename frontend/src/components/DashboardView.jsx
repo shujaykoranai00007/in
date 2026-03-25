@@ -279,6 +279,7 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
   const postsLoadInFlightRef = useRef(false);
   const autoAnimeLoadInFlightRef = useRef(false);
   const instagramDetailsLoadInFlightRef = useRef(false);
+  const runtimeTickInFlightRef = useRef(false);
 
   // Instagram URL extraction
   const [inputMode, setInputMode] = useState("upload"); // "upload" | "direct" | "instagram"
@@ -352,11 +353,27 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
       desktopNotificationPermission === "granted" &&
       typeof window !== "undefined" &&
       typeof window.Notification !== "undefined" &&
+      typeof document !== "undefined" &&
       document.visibilityState !== "visible"
     ) {
       new window.Notification(title, {
         body: description || title
       });
+    }
+  }
+
+  async function runRuntimeTick() {
+    if (runtimeTickInFlightRef.current) {
+      return;
+    }
+
+    runtimeTickInFlightRef.current = true;
+    try {
+      await api.post("/auto-anime/tick");
+    } catch {
+      // Non-blocking: scheduler cron can still process posts in background.
+    } finally {
+      runtimeTickInFlightRef.current = false;
     }
   }
 
@@ -531,6 +548,7 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
   useEffect(() => {
     loadPosts();
     loadAutoAnimeConfig();
+    runRuntimeTick();
   }, []);
 
   async function loadInstagramDetails({ silent = false } = {}) {
@@ -642,17 +660,16 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") {
-        return;
-      }
+      const isVisible = typeof document === "undefined" || document.visibilityState === "visible";
 
       loadPosts({ silent: true });
+      runRuntimeTick();
 
-      if (activeTab === "animeAutomation") {
+      if (isVisible && activeTab === "animeAutomation") {
         loadAutoAnimeConfig({ silent: true });
       }
 
-      if (activeTab === "insights" && instagramStatus?.valid) {
+      if (isVisible && activeTab === "insights" && instagramStatus?.valid) {
         loadInstagramDetails({ silent: true });
       }
     }, POLL_INTERVAL_MS);
