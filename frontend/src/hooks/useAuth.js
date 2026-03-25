@@ -22,12 +22,9 @@ export function useAuth() {
     try {
       await api.get("/auth/me");
       return true;
-    } catch (error) {
-      const status = Number(error?.response?.status || 0);
-      // Keep the session for transient network/CORS issues and only logout on real auth failures.
-      if (status === 401 || status === 403) {
-        return false;
-      }
+    } catch {
+      // Any failure here means current token/session cannot be trusted for API actions.
+      // Force re-login so the UI does not stay in a broken "logged in but nothing works" state.
       return true;
     }
   }

@@ -1,11 +1,39 @@
 import axios from "axios";
 
+function isLikelyFrontendHost(hostname = "") {
+  const host = String(hostname || "").toLowerCase();
+  return host.endsWith(".vercel.app") || host.endsWith(".netlify.app");
+}
+
+function normalizeApiEnvUrl(raw) {
+  const value = String(raw || "").trim();
+  if (!value) {
+    return "";
+  }
+
+  try {
+    const parsed = new URL(value);
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      return "";
+    }
+
+    // Prevent accidental frontend-domain API URLs that break all dashboard actions.
+    if (isLikelyFrontendHost(parsed.hostname)) {
+      return "";
+    }
+
+    return `${parsed.origin}${parsed.pathname.replace(/\/+$/, "")}`;
+  } catch {
+    return "";
+  }
+}
+
 function resolveApiBaseUrl() {
   const isLocalhost = typeof window !== "undefined" && window.location.hostname === "localhost";
+  const envBase = normalizeApiEnvUrl(import.meta.env.VITE_API_URL);
 
   // In local dev, prefer localhost backend; fall back to local port 5000.
   if (isLocalhost) {
-    const envBase = import.meta.env.VITE_API_URL;
     const envLooksLocal =
       typeof envBase === "string" &&
       (envBase.startsWith("http://localhost:") || envBase.startsWith("http://127.0.0.1:"));
@@ -14,7 +42,6 @@ function resolveApiBaseUrl() {
 
   // In hosted/production builds, use the env var injected at build time (e.g. from Vercel).
   // Fall back to the correct production Render backend.
-  const envBase = import.meta.env.VITE_API_URL;
   return envBase || "https://instaflow-9nox.onrender.com/api";
 }
 
