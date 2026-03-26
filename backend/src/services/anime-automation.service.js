@@ -926,8 +926,11 @@ export async function runAutoAnimeNow(options = {}) {
     trigger === "manual"
       ? Math.max(0, Number(options?.queueDelaySeconds) || 45)
       : 0;
+  const detectedUrl = getPublicBaseUrl();
   const noUsablePublicBaseUrl = !hasUsablePublicBaseUrl();
   const requestedContentType = String(config.contentType || "reel").toLowerCase();
+
+  console.log(`[AUTO ANIME] Detected URL: ${detectedUrl}, Usable: ${!noUsablePublicBaseUrl}, Mode: ${requestedContentType}`);
 
   // In reel-only mode, never silently downgrade to image posts.
   if (noUsablePublicBaseUrl && requestedContentType === "reel") {
