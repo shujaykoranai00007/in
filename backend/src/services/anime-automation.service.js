@@ -922,9 +922,10 @@ export async function updateAutoAnimeConfig(payload) {
 export async function runAutoAnimeNow(options = {}) {
   const config = await ensureConfig();
   const trigger = options?.trigger === "scheduler" ? "scheduler" : "manual";
+  const requestedDelaySeconds = Number(options?.queueDelaySeconds);
   const queueDelaySeconds =
     trigger === "manual"
-      ? Math.max(0, Number(options?.queueDelaySeconds) || 45)
+      ? Math.max(0, Number.isFinite(requestedDelaySeconds) ? requestedDelaySeconds : 45)
       : 0;
   const detectedUrl = getPublicBaseUrl();
   const noUsablePublicBaseUrl = !hasUsablePublicBaseUrl();
