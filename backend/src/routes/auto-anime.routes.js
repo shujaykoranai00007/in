@@ -47,7 +47,7 @@ autoAnimeRouter.post("/run-now", async (_req, res, next) => {
 
     if (result?.queued) {
       // User expects run-now to post the just-queued item immediately when possible.
-      await processPostNow(result.postId);
+      const instantProcess = await processPostNow(result.postId, { maxAttempts: 4, waitMs: 3500 });
 
       const latest = await Post.findById(result.postId).lean();
       if (latest) {
@@ -55,9 +55,12 @@ autoAnimeRouter.post("/run-now", async (_req, res, next) => {
           ...result,
           status: latest.status,
           postedAt: latest.postedAt || null,
-          errorLog: latest.errorLog || ""
+          errorLog: latest.errorLog || "",
+          instantProcess
         });
       }
+
+      return res.json({ ...result, instantProcess });
     }
 
     return res.json(result);

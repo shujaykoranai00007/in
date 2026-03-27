@@ -7,6 +7,10 @@ const PROCESSING_STALE_MINUTES = 8;
 const REEL_WAIT_RETRY_MINUTES = 1;
 const RETRY_GAP_SECONDS = Math.max(15, Number(process.env.UPLOAD_RETRY_GAP_SECONDS) || 60);
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function isReelStillProcessingError(error) {
   return (
     error?.code === "REEL_STILL_PROCESSING" ||
@@ -142,7 +146,7 @@ async function processLockedPost(lockedPost) {
       console.error("Local media cleanup failed for post", lockedPost._id, cleanupError);
     }
 
-    return;
+    return { state: "posted" };
   }
 
   if (uploadResult.pending) {
@@ -157,7 +161,7 @@ async function processLockedPost(lockedPost) {
         }
       }
     );
-    return;
+    return { state: "pending-processing" };
   }
 
   const failureMessage = extractFailureMessage(uploadResult.error);
@@ -182,7 +186,7 @@ async function processLockedPost(lockedPost) {
         }
       }
     );
-    return;
+    return { state: "pending-retry" };
   }
 
   await Post.updateOne(
@@ -195,25 +199,58 @@ async function processLockedPost(lockedPost) {
       }
     }
   );
+
+  return { state: "failed" };
 }
 
-export async function processPostNow(postId) {
+export async function processPostNow(postId, options = {}) {
   if (!postId) {
     return { processed: false, reason: "missing-post-id" };
   }
 
-  const lockedPost = await Post.findOneAndUpdate(
-    { _id: postId, status: "pending" },
-    { $set: { status: "processing" } },
-    { new: true }
-  );
+  const maxAttempts = Math.min(6, Math.max(1, Number(options.maxAttempts) || 1));
+  const waitMs = Math.min(8000, Math.max(1000, Number(options.waitMs) || 3500));
 
-  if (!lockedPost) {
-    return { processed: false, reason: "not-pending" };
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const lockedPost = await Post.findOneAndUpdate(
+      { _id: postId, status: "pending" },
+      { $set: { status: "processing" } },
+      { new: true }
+    );
+
+    if (!lockedPost) {
+      const existing = await Post.findById(postId).lean();
+      const status = String(existing?.status || "missing");
+
+      if (status === "processing" && attempt < maxAttempts) {
+        await sleep(1000);
+        continue;
+      }
+
+      return { processed: status === "posted", reason: "not-pending", status, attempts: attempt };
+    }
+
+    const stepResult = await processLockedPost(lockedPost);
+    const latest = await Post.findById(postId).lean();
+    const status = String(latest?.status || stepResult?.state || "unknown");
+
+    if (status === "posted" || status === "failed") {
+      return { processed: status === "posted", status, reason: stepResult?.state || "terminal", attempts: attempt };
+    }
+
+    if (status === "pending" && attempt < maxAttempts) {
+      if (stepResult?.state === "pending-processing" || stepResult?.state === "pending-retry") {
+        await sleep(waitMs);
+        continue;
+      }
+    }
+
+    return { processed: false, status, reason: stepResult?.state || "not-terminal", attempts: attempt };
   }
 
-  await processLockedPost(lockedPost);
-  return { processed: true };
+  const finalPost = await Post.findById(postId).lean();
+  const finalStatus = String(finalPost?.status || "unknown");
+  return { processed: finalStatus === "posted", status: finalStatus, reason: "max-attempts-reached", attempts: maxAttempts };
 }
 
 export async function processPendingPosts() {
