@@ -6,7 +6,7 @@ import {
   runAutoAnimeNow,
   updateAutoAnimeConfig
 } from "../services/anime-automation.service.js";
-import { processPendingPosts } from "../services/scheduler.service.js";
+import { processPendingPosts, processPostNow } from "../services/scheduler.service.js";
 import { Post } from "../models/Post.js";
 
 export const autoAnimeRouter = Router();
@@ -46,8 +46,8 @@ autoAnimeRouter.post("/run-now", async (_req, res, next) => {
     const result = await runAutoAnimeNow({ queueDelaySeconds: 0 });
 
     if (result?.queued) {
-      // User expects run-now to post immediately when possible.
-      await processPendingPosts();
+      // User expects run-now to post the just-queued item immediately when possible.
+      await processPostNow(result.postId);
 
       const latest = await Post.findById(result.postId).lean();
       if (latest) {

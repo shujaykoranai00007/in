@@ -96,6 +96,126 @@ async function recoverStaleProcessingPosts() {
   );
 }
 
+async function processLockedPost(lockedPost) {
+  const uploadResult = await uploadOnce(lockedPost);
+  const nextAttempts = Number(lockedPost.attempts || 0) + 1;
+
+  if (uploadResult.success) {
+    const successUpdate = {
+      status: "posted",
+      postedAt: new Date(),
+      instagramCreationId: uploadResult.result.creationId,
+      instagramPublishId: uploadResult.result.publishId || "",
+      instagramMediaType: uploadResult.result.publishedDetails?.media_type || "",
+      instagramMediaProductType: uploadResult.result.publishedDetails?.media_product_type || "",
+      instagramPermalink: uploadResult.result.publishedDetails?.permalink || "",
+      attempts: nextAttempts,
+      errorLog: ""
+    };
+
+    if (uploadResult.result.mediaUrl) {
+      successUpdate.mediaUrl = uploadResult.result.mediaUrl;
+    }
+
+    await Post.updateOne(
+      { _id: lockedPost._id },
+      {
+        $set: successUpdate
+      }
+    );
+
+    try {
+      const cleanup = await cleanupPostLocalMedia(lockedPost);
+      if (cleanup.removed) {
+        await Post.updateOne(
+          { _id: lockedPost._id },
+          {
+            $set: {
+              localMediaPath: null,
+              isTemporaryMedia: false,
+              localMediaDeletedAt: new Date()
+            }
+          }
+        );
+      }
+    } catch (cleanupError) {
+      console.error("Local media cleanup failed for post", lockedPost._id, cleanupError);
+    }
+
+    return;
+  }
+
+  if (uploadResult.pending) {
+    await Post.updateOne(
+      { _id: lockedPost._id },
+      {
+        $set: {
+          status: "pending",
+          scheduledTime: new Date(Date.now() + REEL_WAIT_RETRY_MINUTES * 60 * 1000),
+          attempts: lockedPost.attempts || 0,
+          errorLog: ""
+        }
+      }
+    );
+    return;
+  }
+
+  const failureMessage = extractFailureMessage(uploadResult.error);
+
+  // Build user-friendly error message
+  let displayError = failureMessage;
+  if (isTunnelOrUrlError(uploadResult.error)) {
+    displayError = `Instagram could not download media. PUBLIC_BASE_URL must be publicly reachable. Set up a tunnel (ngrok.io, cloudflare, etc.) and update .env PUBLIC_BASE_URL. Error: ${failureMessage}`;
+  }
+
+  const shouldRetry = isRetryableInstagramError(uploadResult.error) && nextAttempts < MAX_RETRIES;
+
+  if (shouldRetry) {
+    await Post.updateOne(
+      { _id: lockedPost._id },
+      {
+        $set: {
+          status: "pending",
+          scheduledTime: new Date(Date.now() + RETRY_GAP_SECONDS * 1000),
+          attempts: nextAttempts,
+          errorLog: ""
+        }
+      }
+    );
+    return;
+  }
+
+  await Post.updateOne(
+    { _id: lockedPost._id },
+    {
+      $set: {
+        status: "failed",
+        attempts: nextAttempts,
+        errorLog: displayError
+      }
+    }
+  );
+}
+
+export async function processPostNow(postId) {
+  if (!postId) {
+    return { processed: false, reason: "missing-post-id" };
+  }
+
+  const lockedPost = await Post.findOneAndUpdate(
+    { _id: postId, status: "pending" },
+    { $set: { status: "processing" } },
+    { new: true }
+  );
+
+  if (!lockedPost) {
+    return { processed: false, reason: "not-pending" };
+  }
+
+  await processLockedPost(lockedPost);
+  return { processed: true };
+}
+
 export async function processPendingPosts() {
   await recoverStaleProcessingPosts();
 
@@ -117,104 +237,6 @@ export async function processPendingPosts() {
     if (!lockedPost) {
       continue;
     }
-
-    const uploadResult = await uploadOnce(lockedPost);
-    const nextAttempts = Number(lockedPost.attempts || 0) + 1;
-
-    if (uploadResult.success) {
-      const successUpdate = {
-        status: "posted",
-        postedAt: new Date(),
-        instagramCreationId: uploadResult.result.creationId,
-        instagramPublishId: uploadResult.result.publishId || "",
-        instagramMediaType: uploadResult.result.publishedDetails?.media_type || "",
-        instagramMediaProductType: uploadResult.result.publishedDetails?.media_product_type || "",
-        instagramPermalink: uploadResult.result.publishedDetails?.permalink || "",
-        attempts: nextAttempts,
-        errorLog: ""
-      };
-
-      if (uploadResult.result.mediaUrl) {
-        successUpdate.mediaUrl = uploadResult.result.mediaUrl;
-      }
-
-      await Post.updateOne(
-        { _id: lockedPost._id },
-        {
-          $set: successUpdate
-        }
-      );
-
-      try {
-        const cleanup = await cleanupPostLocalMedia(lockedPost);
-        if (cleanup.removed) {
-          await Post.updateOne(
-            { _id: lockedPost._id },
-            {
-              $set: {
-                localMediaPath: null,
-                isTemporaryMedia: false,
-                localMediaDeletedAt: new Date()
-              }
-            }
-          );
-        }
-      } catch (cleanupError) {
-        console.error("Local media cleanup failed for post", lockedPost._id, cleanupError);
-      }
-
-      continue;
-    }
-
-    if (uploadResult.pending) {
-      await Post.updateOne(
-        { _id: lockedPost._id },
-        {
-          $set: {
-            status: "pending",
-            scheduledTime: new Date(Date.now() + REEL_WAIT_RETRY_MINUTES * 60 * 1000),
-            attempts: lockedPost.attempts || 0,
-            errorLog: ""
-          }
-        }
-      );
-      continue;
-    }
-
-    const failureMessage = extractFailureMessage(uploadResult.error);
-
-    // Build user-friendly error message
-    let displayError = failureMessage;
-    if (isTunnelOrUrlError(uploadResult.error)) {
-      displayError = `Instagram could not download media. PUBLIC_BASE_URL must be publicly reachable. Set up a tunnel (ngrok.io, cloudflare, etc.) and update .env PUBLIC_BASE_URL. Error: ${failureMessage}`;
-    }
-
-    const shouldRetry = isRetryableInstagramError(uploadResult.error) && nextAttempts < MAX_RETRIES;
-
-    if (shouldRetry) {
-      await Post.updateOne(
-        { _id: lockedPost._id },
-        {
-          $set: {
-            status: "pending",
-            scheduledTime: new Date(Date.now() + RETRY_GAP_SECONDS * 1000),
-            attempts: nextAttempts,
-            errorLog: ""
-          }
-        }
-      );
-      continue;
-    }
-
-    await Post.updateOne(
-      { _id: lockedPost._id },
-      {
-        $set: {
-          status: "failed",
-          attempts: nextAttempts,
-          errorLog: displayError
-        }
-      }
-    );
+    await processLockedPost(lockedPost);
   }
 }
