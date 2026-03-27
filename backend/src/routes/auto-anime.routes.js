@@ -7,6 +7,7 @@ import {
   updateAutoAnimeConfig
 } from "../services/anime-automation.service.js";
 import { processPendingPosts } from "../services/scheduler.service.js";
+import { Post } from "../models/Post.js";
 
 export const autoAnimeRouter = Router();
 const RUNTIME_TICK_MIN_GAP_MS = 25000;
@@ -42,9 +43,48 @@ autoAnimeRouter.post("/run-now", async (_req, res, next) => {
       await updateAutoAnimeConfig(payload);
     }
 
-    const result = await runAutoAnimeNow({ queueDelaySeconds: 45 });
+    const result = await runAutoAnimeNow({ queueDelaySeconds: 0 });
+
+    if (result?.queued) {
+      // User expects run-now to post immediately when possible.
+      await processPendingPosts();
+
+      const latest = await Post.findById(result.postId).lean();
+      if (latest) {
+        return res.json({
+          ...result,
+          status: latest.status,
+          postedAt: latest.postedAt || null,
+          errorLog: latest.errorLog || ""
+        });
+      }
+    }
 
     return res.json(result);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+autoAnimeRouter.post("/activate-daily", async (req, res, next) => {
+  try {
+    const payload = req.body || {};
+    const mergedPayload = {
+      ...payload,
+      enabled: true
+    };
+
+    const updated = await updateAutoAnimeConfig(mergedPayload);
+
+    // Trigger a tick once so any already-due jobs can execute immediately.
+    await processAutoAnimeSchedule();
+    await processPendingPosts();
+
+    return res.json({
+      activated: true,
+      message: "Daily auto scheduler activated. It will post at your saved time slots.",
+      config: updated
+    });
   } catch (error) {
     return next(error);
   }

@@ -147,7 +147,7 @@ function extractReelCandidate(post, config) {
     sourceUrl: `https://www.reddit.com${post.permalink || source?.permalink || ""}`,
     sourcePlatform: "reddit",
     postType: "reel",
-    mediaUrl: normalizeUrl(redditVideo.fallback_url, { stripQuery: true }),
+    mediaUrl: normalizeUrl(redditVideo.fallback_url),
     dashUrl: normalizeUrl(redditVideo.dash_url || ""),
     title: post.title || "Anime edit",
     subreddit: post.subreddit,

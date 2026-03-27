@@ -932,21 +932,8 @@ export async function runAutoAnimeNow(options = {}) {
 
   console.log(`[AUTO ANIME] Detected URL: ${detectedUrl}, Usable: ${!noUsablePublicBaseUrl}, Mode: ${requestedContentType}`);
 
-  // In reel-only mode, never silently downgrade to image posts.
-  if (noUsablePublicBaseUrl && requestedContentType === "reel") {
-    if (config.continuousSearchEnabled) {
-      config.continuousSearchEnabled = false;
-      config.continuousSearchRequestedAt = null;
-      config.continuousSearchLastAttemptAt = new Date();
-      await config.save();
-    }
-
-    return {
-      queued: false,
-      message:
-        "Reel mode requires a public PUBLIC_BASE_URL. No image fallback applied. Set a public HTTPS URL and try again."
-    };
-  }
+  // Keep reel-only mode strict (no image fallback), but still try queueing direct public reel URLs.
+  // PUBLIC_BASE_URL is only mandatory when we need to serve locally generated media files.
 
   const forcePostModeForLocal =
     noUsablePublicBaseUrl && requestedContentType === "both";

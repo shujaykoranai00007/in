@@ -241,6 +241,7 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
   const [autoAnimeLoading, setAutoAnimeLoading] = useState(false);
   const [autoAnimeSaving, setAutoAnimeSaving] = useState(false);
   const [autoAnimeRunning, setAutoAnimeRunning] = useState(false);
+  const [autoAnimeActivating, setAutoAnimeActivating] = useState(false);
   const [autoAnimeMessage, setAutoAnimeMessage] = useState("");
   const [newTimeSlot, setNewTimeSlot] = useState("");
 
@@ -528,11 +529,28 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
         contentType: autoAnimeConfig?.contentType || "both"
       });
       if (data.queued) {
-        setAutoAnimeMessage(`Queued ${data.postType || "reel"} from r/${data.subreddit}: ${data.title}`);
+        const status = String(data.status || "pending").toLowerCase();
+        if (status === "posted") {
+          setAutoAnimeMessage(`Instantly posted ${data.postType || "reel"} from r/${data.subreddit}: ${data.title}`);
+        } else if (status === "failed") {
+          setAutoAnimeMessage(
+            `Queued ${data.postType || "reel"} but instant upload failed: ${data.errorLog || "Check queue/error log."}`
+          );
+        } else {
+          setAutoAnimeMessage(`Queued ${data.postType || "reel"} from r/${data.subreddit}: ${data.title}`);
+        }
         addActivityEvent({
-          tone: "info",
-          title: `${String(data.postType || "reel").toUpperCase()} queued from auto anime`,
-          description: data.title ? `${data.title}` : "Auto anime added new content to queue."
+          tone: status === "posted" ? "success" : status === "failed" ? "danger" : "info",
+          title:
+            status === "posted"
+              ? `${String(data.postType || "reel").toUpperCase()} posted instantly`
+              : `${String(data.postType || "reel").toUpperCase()} queued from auto anime`,
+          description:
+            status === "failed"
+              ? data.errorLog || "Instant upload failed."
+              : data.title
+                ? `${data.title}`
+                : "Auto anime added new content to queue."
         });
         await loadPosts();
       } else {
@@ -542,6 +560,63 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
       setAutoAnimeMessage(error?.response?.data?.message || "Failed to run anime automation now.");
     } finally {
       setAutoAnimeRunning(false);
+    }
+  }
+
+  async function activateDailyAutoSchedule() {
+    if (!autoAnimeConfig) {
+      return;
+    }
+
+    setAutoAnimeActivating(true);
+    setAutoAnimeMessage("");
+
+    try {
+      const hashtagSetsText = Array.isArray(autoAnimeConfig.hashtagSets)
+        ? autoAnimeConfig.hashtagSets.join("\n")
+        : String(autoAnimeConfig.hashtagSets || "");
+      const keywordSetsText = Array.isArray(autoAnimeConfig.keywordSets)
+        ? autoAnimeConfig.keywordSets.join("\n")
+        : String(autoAnimeConfig.keywordSets || "");
+
+      const payload = {
+        ...autoAnimeConfig,
+        enabled: true,
+        subreddits: String(autoAnimeConfig.subreddits || "")
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
+        keywords: String(autoAnimeConfig.keywords || "")
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
+        hashtagSets: hashtagSetsText
+          .split("\n")
+          .map((item) => item.trim())
+          .filter(Boolean),
+        keywordSets: keywordSetsText
+          .split("\n")
+          .map((item) => item.trim())
+          .filter(Boolean),
+        timeSlots: (autoAnimeConfig.timeSlots || []).filter(Boolean)
+      };
+
+      const { data } = await api.post("/auto-anime/activate-daily", payload);
+      if (data?.config) {
+        setAutoAnimeConfig(data.config);
+      }
+
+      setAutoAnimeMessage(data?.message || "Daily auto scheduler activated.");
+      addActivityEvent({
+        tone: "success",
+        title: "Daily auto schedule activated",
+        description: "Saved time slots par daily auto post run hoga."
+      });
+      await loadPosts();
+    } catch (error) {
+      setAutoAnimeMessage(error?.response?.data?.message || "Could not activate daily auto scheduler.");
+    } finally {
+      setAutoAnimeActivating(false);
     }
   }
 
@@ -1633,14 +1708,24 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                     Pull high-quality anime reels or image posts from Reddit and auto-schedule at your fixed daily times.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={runAutoAnimeNow}
-                  disabled={autoAnimeRunning || autoAnimeLoading}
-                  className="ghost-btn px-3 py-2 text-xs disabled:opacity-60"
-                >
-                  {autoAnimeRunning ? "Running..." : "Run Now"}
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={runAutoAnimeNow}
+                    disabled={autoAnimeRunning || autoAnimeLoading || autoAnimeActivating}
+                    className="ghost-btn px-3 py-2 text-xs disabled:opacity-60"
+                  >
+                    {autoAnimeRunning ? "Running..." : "Run Now (Instant)"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={activateDailyAutoSchedule}
+                    disabled={autoAnimeActivating || autoAnimeLoading || autoAnimeRunning || !autoAnimeConfig}
+                    className="pro-btn px-3 py-2 text-xs disabled:opacity-60"
+                  >
+                    {autoAnimeActivating ? "Activating..." : "Start Daily Auto"}
+                  </button>
+                </div>
               </div>
 
               {autoAnimeLoading && (
