@@ -25,7 +25,7 @@ export function useAuth() {
     } catch {
       // Any failure here means current token/session cannot be trusted for API actions.
       // Force re-login so the UI does not stay in a broken "logged in but nothing works" state.
-      return true;
+      return false;
     }
   }
 
