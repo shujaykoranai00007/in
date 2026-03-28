@@ -111,6 +111,7 @@ function arePostListsEqual(previous = [], next = []) {
 
 const CUSTOM_THEME_STORAGE_KEY = "instaflow_custom_theme_v1";
 const ACTIVE_THEME_STORAGE_KEY = "instaflow_active_theme_v1";
+const INSTANT_POST_REQUEST_TIMEOUT_MS = 180000;
 
 const DEFAULT_CUSTOM_THEME = {
   bgBase: "#edf5ff",
@@ -867,14 +868,20 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
 
         finalMediaUrl = data?.post?.mediaUrl || "";
       } else {
-        await api.post("/posts", {
-          mediaUrl: finalMediaUrl,
-          caption: finalCaption,
-          keywords: finalKeywords,
-          hashtags: finalHashtags,
-          postType,
-          scheduledTime
-        });
+        await api.post(
+          "/posts",
+          {
+            mediaUrl: finalMediaUrl,
+            caption: finalCaption,
+            keywords: finalKeywords,
+            hashtags: finalHashtags,
+            postType,
+            scheduledTime
+          },
+          {
+            timeout: INSTANT_POST_REQUEST_TIMEOUT_MS
+          }
+        );
       }
 
       setMediaFile(null);
@@ -899,7 +906,13 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
       await loadPosts();
       setActiveTab("pending");
     } catch (error) {
-      setMessage(error?.response?.data?.message || "Failed to schedule post.");
+      if (error?.code === "ECONNABORTED") {
+        setMessage(
+          "Request timed out while Instagram was processing this reel. Post may still be queued; refresh queue in a few seconds."
+        );
+      } else {
+        setMessage(error?.response?.data?.message || "Failed to schedule post.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -946,11 +959,17 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
     setMessage("");
 
     try {
-      const { data } = await api.post("/posts/from-link/auto", {
-        sourceUrl: instagramUrl.trim(),
-        caption: caption || undefined,
-        postType
-      });
+      const { data } = await api.post(
+        "/posts/from-link/auto",
+        {
+          sourceUrl: instagramUrl.trim(),
+          caption: caption || undefined,
+          postType
+        },
+        {
+          timeout: INSTANT_POST_REQUEST_TIMEOUT_MS
+        }
+      );
 
       const posted = data?.post?.status === "posted";
       const typeLabel = data?.post?.postType === "reel" ? "Reel" : "Post";

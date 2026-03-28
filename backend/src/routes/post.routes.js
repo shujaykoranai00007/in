@@ -10,7 +10,7 @@ import { authMiddleware } from "../middleware/auth.js";
 import { Post } from "../models/Post.js";
 import { generateUploadText } from "../services/caption-suggest.service.js";
 import { extractMediaFromUrl } from "../services/media-extract.service.js";
-import { processPendingPosts } from "../services/scheduler.service.js";
+import { processPendingPosts, processPostNow } from "../services/scheduler.service.js";
 import { cleanupPostLocalMedia } from "../services/media-cleanup.service.js";
 
 export const postRouter = Router();
@@ -24,7 +24,14 @@ if (!fs.existsSync(uploadsDir)) {
 }
 
 function getPublicBaseUrl(req) {
-  const candidates = [process.env.RENDER_EXTERNAL_URL, process.env.PUBLIC_BASE_URL];
+  const candidates = [
+    process.env.RENDER_EXTERNAL_URL,
+    process.env.PUBLIC_BASE_URL,
+    req.get("x-forwarded-host")
+      ? `${req.get("x-forwarded-proto") || req.protocol}://${req.get("x-forwarded-host")}`
+      : "",
+    `${req.protocol}://${req.get("host")}`
+  ];
 
   for (const candidate of candidates) {
     const value = String(candidate || "").trim();
@@ -35,6 +42,11 @@ function getPublicBaseUrl(req) {
     try {
       const parsed = new URL(value);
       if (["http:", "https:"].includes(parsed.protocol)) {
+        const host = parsed.hostname.toLowerCase();
+        if (host.endsWith(".vercel.app") || host.endsWith(".netlify.app")) {
+          continue;
+        }
+
         return parsed.origin;
       }
     } catch {
@@ -67,6 +79,15 @@ function looksLikeVideoUrl(url = "") {
 function isImageInsteadOfReelError(error) {
   const msg = String(error?.message || "").toLowerCase();
   return msg.includes("resolved to an image post") || msg.includes("not a reel video");
+}
+
+function getInstantProcessOptions(postType) {
+  if (String(postType || "").toLowerCase() === "reel") {
+    // Reels often need longer processing time on Instagram before publish can succeed.
+    return { maxAttempts: 8, waitMs: 5000 };
+  }
+
+  return { maxAttempts: 4, waitMs: 3500 };
 }
 
 async function extractMediaWithTypeFallback(sourceUrl, requestedPostType) {
@@ -335,11 +356,17 @@ postRouter.post("/from-link/auto", async (req, res, next) => {
       isTemporaryMedia: true
     });
 
-    // Trigger immediate processing so user does not need to wait for next cron minute.
-    // If this step fails, keep the post queued and return a non-fatal message.
+    // Trigger immediate processing for this exact post.
+    // If this step fails, keep the post queued and return a non-fatal warning.
     let processingWarning = "";
+    let instantProcess = null;
     try {
-      await processPendingPosts();
+      instantProcess = await processPostNow(created._id, getInstantProcessOptions(created.postType));
+
+      // Fallback: if lock contention prevented immediate processing, kick the queue worker once.
+      if (!instantProcess?.processed && instantProcess?.status === "pending") {
+        await processPendingPosts();
+      }
     } catch (processingError) {
       processingWarning =
         processingError?.message ||
@@ -351,7 +378,8 @@ postRouter.post("/from-link/auto", async (req, res, next) => {
       message: processingWarning
         ? `Link downloaded. ${processingWarning}`
         : "Link downloaded and auto post triggered.",
-      post: latest || created
+      post: latest || created,
+      instantProcess
     });
   } catch (error) {
     const fallbackMessage =
@@ -476,7 +504,24 @@ postRouter.post("/", async (req, res, next) => {
       status: "pending"
     });
 
-    return res.status(201).json(post);
+    // If user schedules for now/past (or near-now), attempt immediate publish.
+    const shouldProcessNow = parsedSchedule.getTime() <= Date.now() + 15 * 1000;
+    if (!shouldProcessNow) {
+      return res.status(201).json(post);
+    }
+
+    let instantProcess = null;
+    try {
+      instantProcess = await processPostNow(post._id, getInstantProcessOptions(post.postType));
+    } catch {
+      // Keep post queued if immediate processing throws.
+    }
+
+    const latest = await Post.findById(post._id).lean();
+    return res.status(201).json({
+      ...(latest || post),
+      instantProcess
+    });
   } catch (error) {
     return next(error);
   }
