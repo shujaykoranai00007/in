@@ -219,11 +219,14 @@ async function fetchSubredditFeed(subreddit, sort = "hot") {
   const endpoint = `/r/${encodeURIComponent(subreddit)}/${sort}.json`;
   let lastError = null;
 
+  console.log(`[REDDIT FETCH] Fetching ${subreddit}/${sort} from ${REDDIT_BASE_URLS.length} hosts...`);
+
   for (const baseURL of REDDIT_BASE_URLS) {
     const redditClient = createRedditClient(baseURL);
 
     for (let attempt = 1; attempt <= REDDIT_REQUEST_MAX_ATTEMPTS; attempt += 1) {
       try {
+        console.log(`[REDDIT FETCH] Attempt ${attempt}/${REDDIT_REQUEST_MAX_ATTEMPTS} to ${baseURL}${endpoint}`);
         const { data } = await redditClient.get(endpoint, {
           params: {
             limit: REDDIT_LIMIT,
@@ -234,26 +237,37 @@ async function fetchSubredditFeed(subreddit, sort = "hot") {
 
         const children = data?.data?.children || [];
         const posts = children.map((item) => item?.data).filter(Boolean);
+        
         if (posts.length) {
+          console.log(`[REDDIT FETCH] ✅ Success on ${baseURL}: got ${posts.length} posts from ${subreddit}/${sort}`);
           return posts;
         }
 
+        console.log(`[REDDIT FETCH] ⚠️  No posts returned from ${baseURL}${endpoint}, trying next host...`);
         break;
       } catch (error) {
         lastError = error;
         const status = Number(error?.response?.status || 0);
+        const statusText = error?.response?.statusText || "UNKNOWN";
+
+        console.log(`[REDDIT FETCH] ❌ Attempt ${attempt}/${REDDIT_REQUEST_MAX_ATTEMPTS} failed: ${status} ${statusText} from ${baseURL}`);
+        console.log(`[REDDIT FETCH]    Error: ${error?.message || error}`);
 
         // Retry once for transient issues; then move to next Reddit host.
         if (attempt < REDDIT_REQUEST_MAX_ATTEMPTS && (status === 429 || status >= 500 || status === 0)) {
-          await delay(350 * attempt);
+          const delayMs = 350 * attempt;
+          console.log(`[REDDIT FETCH]    Retrying in ${delayMs}ms (status ${status} is transient)...`);
+          await delay(delayMs);
           continue;
         }
 
+        console.log(`[REDDIT FETCH]    Moving to next host...`);
         break;
       }
     }
   }
 
+  console.error(`[REDDIT FETCH] ❌ FAILED all hosts for ${subreddit}/${sort}: ${lastError?.message || "no posts found"}`);
   throw lastError || new Error("Unable to fetch subreddit feed from Reddit");
 }
 
@@ -261,14 +275,23 @@ export async function getRedditAnimeCandidates(config) {
   const subreddits = config.subreddits.length ? config.subreddits : ["AnimeEdit"];
   const results = [];
 
+  console.log(`[REDDIT CANDIDATES] Starting search across ${subreddits.length} subreddits: ${subreddits.join(", ")}`);
+  console.log(`[REDDIT CANDIDATES] Settings: contentType=${config.contentType}, minScore=${config.minScore}, minWidth=${config.minWidth}px, maxAge=${config.maxAgeHours}h`);
+
   for (const subreddit of subreddits) {
     try {
+      console.log(`[REDDIT CANDIDATES] 📂 Fetching /r/${subreddit}...`);
       const [hotPosts, topPosts] = await Promise.all([
         fetchSubredditFeed(subreddit, "hot"),
         fetchSubredditFeed(subreddit, "top")
       ]);
 
       const merged = [...hotPosts, ...topPosts];
+      console.log(`[REDDIT CANDIDATES]    ✓ Merged ${hotPosts.length} hot + ${topPosts.length} top posts from /r/${subreddit}`);
+
+      let reelCount = 0;
+      let imageCount = 0;
+
       for (const post of merged) {
         if (post.stickied || post.over_18 || post.is_gallery) {
           continue;
@@ -278,6 +301,7 @@ export async function getRedditAnimeCandidates(config) {
           const reelCandidate = extractReelCandidate(post, config);
           if (reelCandidate) {
             results.push(reelCandidate);
+            reelCount++;
           }
         }
 
@@ -285,14 +309,19 @@ export async function getRedditAnimeCandidates(config) {
           const imageCandidate = extractImageCandidate(post, config);
           if (imageCandidate) {
             results.push(imageCandidate);
+            imageCount++;
           }
         }
       }
+
+      console.log(`[REDDIT CANDIDATES]    → Extracted ${reelCount} reels + ${imageCount} images from /r/${subreddit}`);
     } catch (error) {
-      console.error(`Failed to fetch subreddit ${subreddit}`, error?.message || error);
+      console.error(`[REDDIT CANDIDATES] ❌ Failed to fetch /r/${subreddit}: ${error?.message || error}`);
+      console.error(`[REDDIT CANDIDATES]    Full error:`, error);
     }
   }
 
+  console.log(`[REDDIT CANDIDATES] Deduplicating ${results.length} total results...`);
   const deduped = new Map();
   for (const item of results) {
     const dedupeKey = `${item.sourceId}:${item.postType}`;
@@ -308,6 +337,11 @@ export async function getRedditAnimeCandidates(config) {
 
     return b.width - a.width;
   });
+
+  console.log(`[REDDIT CANDIDATES] ✅ Final result: ${sorted.length} unique candidates (deduped from ${results.length})`);
+  if (sorted.length === 0) {
+    console.warn(`[REDDIT CANDIDATES] ⚠️  WARNING: No candidates found! Check Reddit connectivity or subreddit settings.`);
+  }
 
   if (!isRandomMode(config)) {
     return sorted;

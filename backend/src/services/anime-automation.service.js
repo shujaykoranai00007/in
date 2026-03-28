@@ -920,150 +920,183 @@ export async function updateAutoAnimeConfig(payload) {
 }
 
 export async function runAutoAnimeNow(options = {}) {
-  const config = await ensureConfig();
-  const trigger = options?.trigger === "scheduler" ? "scheduler" : "manual";
-  const requestedDelaySeconds = Number(options?.queueDelaySeconds);
-  const queueDelaySeconds =
-    trigger === "manual"
-      ? Math.max(0, Number.isFinite(requestedDelaySeconds) ? requestedDelaySeconds : 45)
-      : 0;
-  const detectedUrl = getPublicBaseUrl();
-  const noUsablePublicBaseUrl = !hasUsablePublicBaseUrl();
-  const requestedContentType = String(config.contentType || "reel").toLowerCase();
+  try {
+    const config = await ensureConfig();
+    const trigger = options?.trigger === "scheduler" ? "scheduler" : "manual";
+    const requestedDelaySeconds = Number(options?.queueDelaySeconds);
+    const queueDelaySeconds =
+      trigger === "manual"
+        ? Math.max(0, Number.isFinite(requestedDelaySeconds) ? requestedDelaySeconds : 45)
+        : 0;
+    const detectedUrl = getPublicBaseUrl();
+    const noUsablePublicBaseUrl = !hasUsablePublicBaseUrl();
+    const requestedContentType = String(config.contentType || "reel").toLowerCase();
 
-  console.log(`[AUTO ANIME] Detected URL: ${detectedUrl}, Usable: ${!noUsablePublicBaseUrl}, Mode: ${requestedContentType}`);
+    console.log(`[AUTO ANIME] Starting fetch cycle - Detected URL: ${detectedUrl}, Usable: ${!noUsablePublicBaseUrl}, Mode: ${requestedContentType}, Trigger: ${trigger}`);
 
-  // Keep reel-only mode strict (no image fallback), but still try queueing direct public reel URLs.
-  // PUBLIC_BASE_URL is only mandatory when we need to serve locally generated media files.
+    // Keep reel-only mode strict (no image fallback), but still try queueing direct public reel URLs.
+    // PUBLIC_BASE_URL is only mandatory when we need to serve locally generated media files.
 
-  const forcePostModeForLocal =
-    noUsablePublicBaseUrl && requestedContentType === "both";
-  const candidateConfig = forcePostModeForLocal
-    ? { ...config.toObject(), contentType: "post" }
-    : config;
-  const attemptedCandidates = new Set();
-  let candidate = null;
-  let preparedMediaUrl = "";
+    const forcePostModeForLocal =
+      noUsablePublicBaseUrl && requestedContentType === "both";
+    const candidateConfig = forcePostModeForLocal
+      ? { ...config.toObject(), contentType: "post" }
+      : config;
+    const attemptedCandidates = new Set();
+    let candidate = null;
+    let preparedMediaUrl = "";
 
-  for (let i = 0; i < 8; i += 1) {
-    candidate = await findAvailableCandidate(candidateConfig, attemptedCandidates);
-    if (!candidate) {
-      break;
-    }
+    console.log(`[AUTO ANIME] Searching for candidates (contentType: ${candidateConfig.contentType}, subreddits: ${candidateConfig.subreddits?.join(", ")})`);
 
-    if (candidate.postType === "post") {
-      preparedMediaUrl = await cacheAutoImageCandidate(candidate);
-
-      // For image posts, audio is not required. If caching fails, use direct image URL when reachable.
-      if (!preparedMediaUrl && (await isMediaUrlReachable(candidate.mediaUrl))) {
-        preparedMediaUrl = candidate.mediaUrl;
+    for (let i = 0; i < 8; i += 1) {
+      console.log(`[AUTO ANIME] Fetch attempt ${i + 1}/8...`);
+      candidate = await findAvailableCandidate(candidateConfig, attemptedCandidates);
+      if (!candidate) {
+        console.log(`[AUTO ANIME] ❌ No candidate found at attempt ${i + 1}/8`);
+        break;
       }
-    } else {
-      preparedMediaUrl = await prepareReelWithAudio(candidate);
-    }
 
-    if (preparedMediaUrl) {
-      break;
-    }
+      console.log(`[AUTO ANIME] ✓ Candidate found: ${candidate.sourceId} (${candidate.postType || "reel"})`);
 
-    attemptedCandidates.add(`${candidate.sourceId}:${candidate.postType || "reel"}`);
-    candidate = null;
-  }
-
-  if (!candidate) {
-    candidate = await findCandidateFromRecentHistory(candidateConfig, attemptedCandidates);
-    if (candidate) {
       if (candidate.postType === "post") {
+        console.log(`[AUTO ANIME] 🖼️  Preparing image...`);
         preparedMediaUrl = await cacheAutoImageCandidate(candidate);
 
+        // For image posts, audio is not required. If caching fails, use direct image URL when reachable.
         if (!preparedMediaUrl && (await isMediaUrlReachable(candidate.mediaUrl))) {
+          console.log(`[AUTO ANIME] ✓ Fallback to direct image URL`);
           preparedMediaUrl = candidate.mediaUrl;
         }
       } else {
+        console.log(`[AUTO ANIME] 🎬 Preparing reel with audio...`);
         preparedMediaUrl = await prepareReelWithAudio(candidate);
       }
-    }
 
-    if (!candidate || !preparedMediaUrl) {
-      if (forcePostModeForLocal) {
-        return {
-          queued: false,
-          message:
-            "Local mode detected: reels need a public PUBLIC_BASE_URL. For now, auto mode is trying posts only. Set a public HTTPS URL (ngrok/cloudflared) to enable reels."
-        };
+      if (preparedMediaUrl) {
+        console.log(`[AUTO ANIME] ✅ Media ready: ${preparedMediaUrl}`);
+        break;
       }
 
-      if (requestedContentType === "reel") {
-        if (!config.continuousSearchEnabled) {
-          config.continuousSearchEnabled = true;
-          config.continuousSearchContentType = "reel";
-          config.continuousSearchRequestedAt = new Date();
+      console.log(`[AUTO ANIME] ⚠️  Media preparation failed, trying next candidate...`);
+      attemptedCandidates.add(`${candidate.sourceId}:${candidate.postType || "reel"}`);
+      candidate = null;
+    }
+
+    if (!candidate) {
+      console.log(`[AUTO ANIME] 🔄 No fresh candidates found, checking recent history...`);
+      candidate = await findCandidateFromRecentHistory(candidateConfig, attemptedCandidates);
+      if (candidate) {
+        console.log(`[AUTO ANIME] ✓ Found from history: ${candidate.sourceId} (${candidate.postType || "reel"})`);
+        if (candidate.postType === "post") {
+          console.log(`[AUTO ANIME] 🖼️  Preparing image from history...`);
+          preparedMediaUrl = await cacheAutoImageCandidate(candidate);
+
+          if (!preparedMediaUrl && (await isMediaUrlReachable(candidate.mediaUrl))) {
+            console.log(`[AUTO ANIME] ✓ Fallback to direct image URL`);
+            preparedMediaUrl = candidate.mediaUrl;
+          }
+        } else {
+          console.log(`[AUTO ANIME] 🎬 Preparing reel with audio from history...`);
+          preparedMediaUrl = await prepareReelWithAudio(candidate);
         }
+      }
 
-        config.continuousSearchLastAttemptAt = new Date();
-        await config.save();
-
-        if (trigger === "manual") {
+      if (!candidate || !preparedMediaUrl) {
+        console.log(`[AUTO ANIME] ❌ No usable candidate (fresh or history)`);
+        if (forcePostModeForLocal) {
+          console.log(`[AUTO ANIME] → Force local post mode enabled, need PUBLIC_BASE_URL for reels`);
           return {
             queued: false,
             message:
-              "Abhi reel nahi mili. Continuous search ON ho gaya hai, system har minute reel dhoondhega aur milte hi queue karega."
+              "Local mode detected: reels need a public PUBLIC_BASE_URL. For now, auto mode is trying posts only. Set a public HTTPS URL (ngrok/cloudflared) to enable reels."
           };
         }
 
+        if (requestedContentType === "reel") {
+          console.log(`[AUTO ANIME] → Reel mode: enabling continuous search`);
+          if (!config.continuousSearchEnabled) {
+            config.continuousSearchEnabled = true;
+            config.continuousSearchContentType = "reel";
+            config.continuousSearchRequestedAt = new Date();
+          }
+
+          config.continuousSearchLastAttemptAt = new Date();
+          await config.save();
+
+          if (trigger === "manual") {
+            return {
+              queued: false,
+              message:
+                "Abhi reel nahi mili. Continuous search ON ho gaya hai, system har minute reel dhoondhega aur milte hi queue karega."
+            };
+          }
+
+          return {
+            queued: false,
+            message: "Continuous reel search active: still looking for a publishable reel."
+          };
+        }
+
+        console.log(`[AUTO ANIME] → Mixed/image mode: no media available now`);
         return {
           queued: false,
-          message: "Continuous reel search active: still looking for a publishable reel."
+          message: "No publishable anime media found now (Reddit may be rate-limited). Try again in a few minutes."
         };
       }
+    }
 
+    if (!preparedMediaUrl) {
+      console.log(`[AUTO ANIME] ⚠️  Media prep failed, scheduling instant retry...`);
       return {
         queued: false,
-        message: "No publishable anime media found now (Reddit may be rate-limited). Try again in a few minutes."
+        message: "Could not prepare media for upload. Try again in a minute."
       };
     }
-  }
 
-  const rotating = pickRotatingHashtagSet(config);
-  const rotatingKeywords = pickRotatingKeywordSet(config);
-  if (!preparedMediaUrl) {
+    console.log(`[AUTO ANIME] 📝 Creating post in queue...`);
+    const rotating = pickRotatingHashtagSet(config);
+    const rotatingKeywords = pickRotatingKeywordSet(config);
+    const post = await Post.create({
+      mediaUrl: preparedMediaUrl,
+      caption: renderCaption(config.captionTemplate, candidate, rotating.text, rotatingKeywords.text),
+      postType: candidate.postType || "reel",
+      scheduledTime: new Date(Date.now() + queueDelaySeconds * 1000),
+      status: "pending",
+      sourcePlatform: candidate.sourcePlatform,
+      sourceId: candidate.sourceId,
+      sourceUrl: candidate.sourceUrl
+    });
+
+    console.log(`[AUTO ANIME] ✅ Post created: ${post._id} (status: pending)`);
+    await appendRecentSourceId(config, `${candidate.sourceId}:${candidate.postType || "reel"}`);
+    config.hashtagSets = rotating.sets;
+    config.hashtagSetCursor = rotating.nextCursor;
+    config.keywordSets = rotatingKeywords.sets;
+    config.keywordSetCursor = rotatingKeywords.nextCursor;
+    if (config.continuousSearchEnabled && (candidate.postType || "reel") === "reel") {
+      config.continuousSearchEnabled = false;
+      config.continuousSearchRequestedAt = null;
+    }
+    config.continuousSearchLastAttemptAt = new Date();
+    await config.save();
+
+    return {
+      queued: true,
+      postId: post._id,
+      postType: candidate.postType || "reel",
+      sourceUrl: candidate.sourceUrl,
+      subreddit: candidate.subreddit,
+      title: candidate.title
+    };
+  } catch (error) {
+    console.error(`[AUTO ANIME] ❌ CRITICAL ERROR in runAutoAnimeNow:`, error?.message || error);
+    console.error(`[AUTO ANIME] Full error details:`, error);
     return {
       queued: false,
-      message: "Could not prepare media for upload. Try again in a minute."
+      message: `Auto anime failed: ${error?.message || "Unknown error occurred"}. Check server logs.`,
+      error: error?.message
     };
   }
-
-  const post = await Post.create({
-    mediaUrl: preparedMediaUrl,
-    caption: renderCaption(config.captionTemplate, candidate, rotating.text, rotatingKeywords.text),
-    postType: candidate.postType || "reel",
-    scheduledTime: new Date(Date.now() + queueDelaySeconds * 1000),
-    status: "pending",
-    sourcePlatform: candidate.sourcePlatform,
-    sourceId: candidate.sourceId,
-    sourceUrl: candidate.sourceUrl
-  });
-
-  await appendRecentSourceId(config, `${candidate.sourceId}:${candidate.postType || "reel"}`);
-  config.hashtagSets = rotating.sets;
-  config.hashtagSetCursor = rotating.nextCursor;
-  config.keywordSets = rotatingKeywords.sets;
-  config.keywordSetCursor = rotatingKeywords.nextCursor;
-  if (config.continuousSearchEnabled && (candidate.postType || "reel") === "reel") {
-    config.continuousSearchEnabled = false;
-    config.continuousSearchRequestedAt = null;
-  }
-  config.continuousSearchLastAttemptAt = new Date();
-  await config.save();
-
-  return {
-    queued: true,
-    postId: post._id,
-    postType: candidate.postType || "reel",
-    sourceUrl: candidate.sourceUrl,
-    subreddit: candidate.subreddit,
-    title: candidate.title
-  };
 }
 
 export async function processAutoAnimeSchedule(now = new Date()) {
