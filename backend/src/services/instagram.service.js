@@ -156,6 +156,27 @@ function isInstagramMediaTypeError(error) {
   return msg.includes("only photo or video can be accepted as media type");
 }
 
+function buildInstagramServiceError(error, fallbackMessage) {
+  const apiError = error?.response?.data?.error || null;
+  const instagramCode = Number(apiError?.code || 0);
+  const message = String(apiError?.message || error?.message || fallbackMessage || "Instagram API error").trim();
+
+  const wrapped = new Error(message || fallbackMessage || "Instagram API error");
+  if (instagramCode > 0) {
+    wrapped.instagramErrorCode = instagramCode;
+    wrapped.code = `INSTAGRAM_${instagramCode}`;
+  }
+
+  if (apiError?.error_subcode) {
+    wrapped.instagramErrorSubcode = Number(apiError.error_subcode);
+  }
+
+  wrapped.instagramErrorType = apiError?.type || "";
+  wrapped.instagramFbtraceId = apiError?.fbtrace_id || "";
+  wrapped.originalError = error;
+  return wrapped;
+}
+
 function toPlainPost(post) {
   if (post && typeof post.toObject === "function") {
     return post.toObject();
@@ -624,7 +645,7 @@ export async function createMediaContainer(post) {
       console.error(`  Full Error:`, JSON.stringify(fullError, null, 2));
     }
     
-    throw new Error(errorMsg || "Failed to create Instagram media container");
+    throw buildInstagramServiceError(error, "Failed to create Instagram media container");
   }
 }
 
@@ -645,7 +666,7 @@ export async function publishMedia(creationId) {
   } catch (error) {
     const errorMsg = error.response?.data?.error?.message || error.message;
     console.error("Media publish error:", errorMsg);
-    throw new Error(errorMsg || "Failed to publish Instagram media");
+    throw buildInstagramServiceError(error, "Failed to publish Instagram media");
   }
 }
 

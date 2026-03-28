@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Control Dashboard - Instaflow</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container-low": "#eff1f2",
+              "surface-dim": "#d1d5d7",
+              "tertiary-dim": "#a40008",
+              "primary-fixed-dim": "#f15cab",
+              "on-tertiary": "#ffefed",
+              "on-secondary-container": "#6a1d9b",
+              "surface-container": "#e6e8ea",
+              "surface-container-highest": "#dadddf",
+              "on-tertiary-container": "#690003",
+              "on-error": "#ffefef",
+              "on-background": "#2c2f30",
+              "primary-container": "#ff6bb8",
+              "secondary-fixed": "#eac4ff",
+              "tertiary-fixed-dim": "#ff7b6c",
+              "on-tertiary-fixed-variant": "#7a0004",
+              "on-error-container": "#510017",
+              "error": "#b41340",
+              "inverse-primary": "#f45fae",
+              "surface-container-lowest": "#ffffff",
+              "on-surface-variant": "#595c5d",
+              "error-container": "#f74b6d",
+              "on-secondary-fixed": "#530081",
+              "primary-fixed": "#ff6bb8",
+              "outline-variant": "#abadae",
+              "secondary-container": "#eac4ff",
+              "secondary-fixed-dim": "#e2b1ff",
+              "on-primary-container": "#4a002e",
+              "on-primary": "#ffeff3",
+              "tertiary-fixed": "#ff9285",
+              "secondary": "#8037b1",
+              "surface-bright": "#f5f6f7",
+              "inverse-surface": "#0c0f10",
+              "primary-dim": "#990b64",
+              "surface-variant": "#dadddf",
+              "outline": "#757778",
+              "inverse-on-surface": "#9b9d9e",
+              "tertiary": "#bb000a",
+              "on-primary-fixed-variant": "#5b0039",
+              "surface": "#f5f6f7",
+              "tertiary-container": "#ff9285",
+              "on-secondary": "#fdeeff",
+              "surface-tint": "#a91f71",
+              "on-tertiary-fixed": "#3a0001",
+              "on-secondary-fixed-variant": "#742aa5",
+              "background": "#f5f6f7",
+              "secondary-dim": "#7329a4",
+              "surface-container-high": "#e0e3e4",
+              "error-dim": "#a70138",
+              "primary": "#a91f71",
+              "on-primary-fixed": "#000000",
+              "on-surface": "#2c2f30"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      body { font-family: 'Inter', sans-serif; }
+      h1, h2, h3, .font-headline { font-family: 'Plus Jakarta Sans', sans-serif; }
+      .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+      .glass-effect { -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface min-h-screen">
+<!-- SideNavBar (The Anchor) -->
+<aside class="h-screen w-64 fixed left-0 top-0 z-40 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-xl flex flex-col p-6 gap-2 shadow-[4px_0px_20px_rgba(169,31,113,0.04)]">
+<div class="mb-8 px-4 flex items-center gap-3">
+<div class="w-10 h-10 rounded-xl bg-gradient-to-br from-fuchsia-600 to-pink-500 flex items-center justify-center text-white font-black text-xl">I</div>
+<div>
+<h1 class="text-2xl font-black bg-gradient-to-br from-fuchsia-600 to-pink-500 bg-clip-text text-transparent tracking-tighter">Instaflow</h1>
+<p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Premium Scheduler</p>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<!-- Control Tab - Active -->
+<a class="flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-800 text-fuchsia-700 dark:text-fuchsia-300 rounded-xl shadow-sm scale-[1.02] transition-all font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                Control
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-fuchsia-600 dark:hover:text-fuchsia-300 transition-colors font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold hover:bg-white/50 dark:hover:bg-slate-800/50 hover:scale-[1.02] duration-300" href="#">
+<span class="material-symbols-outlined">calendar_month</span>
+                Schedule
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-fuchsia-600 dark:hover:text-fuchsia-300 transition-colors font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold hover:bg-white/50 dark:hover:bg-slate-800/50 hover:scale-[1.02] duration-300" href="#">
+<span class="material-symbols-outlined">sensors</span>
+                Live Monitor
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-fuchsia-600 dark:hover:text-fuchsia-300 transition-colors font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold hover:bg-white/50 dark:hover:bg-slate-800/50 hover:scale-[1.02] duration-300" href="#">
+<span class="material-symbols-outlined">analytics</span>
+                Insights
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-fuchsia-600 dark:hover:text-fuchsia-300 transition-colors font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold hover:bg-white/50 dark:hover:bg-slate-800/50 hover:scale-[1.02] duration-300" href="#">
+<span class="material-symbols-outlined">auto_awesome</span>
+                Anime Auto
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-fuchsia-600 dark:hover:text-fuchsia-300 transition-colors font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold hover:bg-white/50 dark:hover:bg-slate-800/50 hover:scale-[1.02] duration-300" href="#">
+<span class="material-symbols-outlined">layers</span>
+                Queued Posts
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-fuchsia-600 dark:hover:text-fuchsia-300 transition-colors font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold hover:bg-white/50 dark:hover:bg-slate-800/50 hover:scale-[1.02] duration-300" href="#">
+<span class="material-symbols-outlined">history</span>
+                History
+            </a>
+</nav>
+<div class="mt-auto">
+<button class="w-full bg-gradient-to-br from-primary to-primary-container text-white py-4 rounded-xl font-headline font-bold text-sm shadow-lg shadow-primary/20 flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform active:scale-95 duration-300">
+<span class="material-symbols-outlined text-lg">add_circle</span>
+                New Post
+            </button>
+</div>
+</aside>
+<!-- TopAppBar -->
+<header class="fixed top-0 right-0 left-64 h-20 z-30 bg-white/70 dark:bg-slate-950/70 backdrop-blur-2xl px-12 flex justify-between items-center no-border">
+<div class="flex items-center gap-4">
+<div class="relative">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-outline">search</span>
+<input aria-label="form field" title="form-field" class="bg-surface-container-high border-none rounded-xl pl-10 pr-4 py-2 w-64 text-sm focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Search insights..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<button class="material-symbols-outlined text-on-surface-variant hover:opacity-80 transition-opacity hover:scale-105 transition-transform">dark_mode</button>
+<button class="material-symbols-outlined text-on-surface-variant hover:opacity-80 transition-opacity hover:scale-105 transition-transform relative">
+                notifications
+                <span class="absolute -top-1 -right-1 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<div class="h-8 w-[1px] bg-outline-variant/30"></div>
+<div class="flex items-center gap-3 cursor-pointer group">
+<div class="text-right">
+<p class="text-sm font-bold font-headline text-slate-900 group-hover:text-primary transition-colors">Alex Rivers</p>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">Pro Plan</p>
+</div>
+<img class="w-10 h-10 rounded-full border-2 border-white shadow-sm object-cover" alt="close-up portrait of a professional man with a friendly expression in soft studio lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC7NleRbEU4Nysn6mYRfHUHCyFnF-0fFCgS5L-6WLRo7FEV-OVPtxfT576oYBC39ItzVlrdsNMUWORkIZ4V68at1S1C3mrRkLDHToU6mm_Dv--3-_lrXNfUR9evGDHVFbdRCWq53fdeUMmRpuizADEEJ49NoaCULUTEdrGeHCTbKS9cQyteBLt_sOWqx-VvuC6-E2ZXC3NzEppVwQglm41YTP9gL8j_1JZ4eY8Q0S_PRkDTVMoDq3wUFmJTpgAjcyjRfnujLWNTGYov"/>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-64 mt-20 p-12 bg-surface min-h-[calc(100vh-5rem)]">
+<!-- Page Header -->
+<div class="mb-10 flex justify-between items-end">
+<div>
+<h2 class="text-4xl font-extrabold font-headline tracking-tight text-on-surface mb-2">Control Center</h2>
+<p class="text-on-surface-variant max-w-lg leading-relaxed">Manage your digital ecosystem connectivity and monitor real-time system health.</p>
+</div>
+<div class="flex gap-3">
+<button class="px-6 py-3 rounded-xl bg-surface-container-lowest text-on-surface font-semibold text-sm shadow-sm hover:bg-surface-container transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">download</span>
+                    Export Logs
+                </button>
+<button class="px-6 py-3 rounded-xl bg-primary text-white font-bold text-sm shadow-md hover:scale-105 transition-transform flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">sync</span>
+                    Force Global Sync
+                </button>
+</div>
+</div>
+<!-- Bento Grid Dashboard -->
+<div class="grid grid-cols-12 gap-8">
+<!-- Account Connection Status (Primary Card) -->
+<div class="col-span-12 lg:col-span-8 bg-surface-container-lowest rounded-[2rem] p-8 shadow-[0px_12px_40px_rgba(0,0,0,0.03)] relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined text-8xl text-primary">hub</span>
+</div>
+<div class="relative z-10">
+<div class="flex items-center gap-4 mb-8">
+<div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-fuchsia-100 to-pink-50 flex items-center justify-center">
+<img class="w-8 h-8" alt="minimalist instagram icon with vibrant gradient colors" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBFjhmETTZhmGuvRyyNWRz81HNuDzk-689cTuEinhkGXrKn56bIo7pa-tiiVVCotr4L7-J8_0ZUsw2YNFILrP9AulvkIUEiOFEVQCWGG2ps4e7G8DPX-kFhWB6SbfV2x9t7vDVM_3pK07lx45kaArrum4_0jdGv_gEPtP40s5Qeg0uKTCqWw-dbnoreC1Y5-xsnGXxWceYkaft-U0czsDmG9EFVz7kOmZrhgj6VKCZLnCrkhKeZhw1Nt-2zZ3y7Hp2e4d9mZQLwXiiH"/>
+</div>
+<div>
+<h3 class="text-xl font-bold font-headline">Instagram Account Connection</h3>
+<p class="text-on-surface-variant text-sm">Linked to: <span class="text-primary font-bold">@theethereal_gallery</span></p>
+</div>
+<div class="ml-auto px-4 py-2 bg-green-50 text-green-600 rounded-full flex items-center gap-2 text-xs font-bold uppercase tracking-wider">
+<span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                            Active Connection
+                        </div>
+</div>
+<div class="grid grid-cols-3 gap-6 mb-8">
+<div class="bg-surface-container-low p-6 rounded-2xl">
+<p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Token Status</p>
+<p class="text-lg font-bold text-green-600">Healthy</p>
+<p class="text-xs text-on-surface-variant mt-2">Expires in 54 days</p>
+</div>
+<div class="bg-surface-container-low p-6 rounded-2xl border-l-4 border-fuchsia-500">
+<p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">API Throughput</p>
+<p class="text-lg font-bold">98.2%</p>
+<p class="text-xs text-on-surface-variant mt-2">Optimal range</p>
+</div>
+<div class="bg-surface-container-low p-6 rounded-2xl">
+<p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Last Handshake</p>
+<p class="text-lg font-bold">2 mins ago</p>
+<p class="text-xs text-on-surface-variant mt-2">Verified session</p>
+</div>
+</div>
+<div class="flex gap-4">
+<button class="flex-1 py-4 bg-secondary-container text-on-secondary-container rounded-xl font-bold text-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-lg">refresh</span>
+                            Refresh Token
+                        </button>
+<button class="flex-1 py-4 bg-surface-container-high text-on-surface font-bold text-sm rounded-xl hover:bg-surface-container-highest transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-lg">link_off</span>
+                            Disconnect Account
+                        </button>
+<button class="px-6 py-4 bg-surface-container-low text-on-surface rounded-xl hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined">more_horiz</span>
+</button>
+</div>
+</div>
+</div>
+<!-- System Health (Secondary Card) -->
+<div class="col-span-12 lg:col-span-4 bg-surface-container-low rounded-[2rem] p-8 flex flex-col justify-between">
+<div>
+<h3 class="text-lg font-bold font-headline mb-6">System Health</h3>
+<div class="space-y-6">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-fuchsia-600">cloud_done</span>
+<span class="text-sm font-semibold">Scheduler Engine</span>
+</div>
+<span class="text-xs font-bold text-green-600">ONLINE</span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-fuchsia-600">database</span>
+<span class="text-sm font-semibold">Queue Sync</span>
+</div>
+<span class="text-xs font-bold text-green-600">IDLE</span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-error">warning</span>
+<span class="text-sm font-semibold">Proxy Latency</span>
+</div>
+<span class="text-xs font-bold text-on-surface-variant">142ms</span>
+</div>
+</div>
+</div>
+<div class="mt-8 pt-8 border-t border-outline-variant/10">
+<p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-4">Worker Nodes</p>
+<div class="flex gap-1">
+<div class="h-2 w-full bg-green-500 rounded-full"></div>
+<div class="h-2 w-full bg-green-500 rounded-full"></div>
+<div class="h-2 w-full bg-green-500 rounded-full"></div>
+<div class="h-2 w-full bg-green-300 rounded-full"></div>
+<div class="h-2 w-full bg-outline-variant/30 rounded-full"></div>
+</div>
+<p class="text-[10px] text-on-surface-variant mt-2 text-right italic">Node 4 experiencing mild load</p>
+</div>
+</div>
+<!-- Quick Actions Bento Item -->
+<div class="col-span-12 lg:col-span-5 bg-surface-container-highest/40 rounded-[2rem] p-8">
+<h3 class="text-lg font-bold font-headline mb-6">Automation Shorthand</h3>
+<div class="grid grid-cols-2 gap-4">
+<button class="p-6 bg-white rounded-2xl text-left group hover:bg-primary transition-all duration-300">
+<span class="material-symbols-outlined text-primary group-hover:text-white mb-3">auto_mode</span>
+<p class="font-bold text-sm group-hover:text-white">Pause Automation</p>
+<p class="text-xs text-on-surface-variant group-hover:text-on-primary/70 mt-1">Stops all pending tasks</p>
+</button>
+<button class="p-6 bg-white rounded-2xl text-left group hover:bg-secondary transition-all duration-300">
+<span class="material-symbols-outlined text-secondary group-hover:text-white mb-3">cleaning_services</span>
+<p class="font-bold text-sm group-hover:text-white">Flush Cache</p>
+<p class="text-xs text-on-surface-variant group-hover:text-on-secondary/70 mt-1">Clear session temp files</p>
+</button>
+<button class="p-6 bg-white rounded-2xl text-left group hover:bg-fuchsia-600 transition-all duration-300">
+<span class="material-symbols-outlined text-fuchsia-600 group-hover:text-white mb-3">verified</span>
+<p class="font-bold text-sm group-hover:text-white">Verify Tags</p>
+<p class="text-xs text-on-surface-variant group-hover:text-on-primary/70 mt-1">Check hashtag health</p>
+</button>
+<button class="p-6 bg-white rounded-2xl text-left group hover:bg-slate-900 transition-all duration-300">
+<span class="material-symbols-outlined text-slate-900 group-hover:text-white mb-3">terminal</span>
+<p class="font-bold text-sm group-hover:text-white">Open Console</p>
+<p class="text-xs text-on-surface-variant group-hover:text-slate-300 mt-1">Advanced dev tools</p>
+</button>
+</div>
+</div>
+<!-- Recent Log Feed (Glassmorphism card) -->
+<div class="col-span-12 lg:col-span-7 bg-white/40 backdrop-blur-xl rounded-[2rem] p-8 border border-white/20 shadow-sm relative overflow-hidden">
+<div class="flex justify-between items-center mb-6">
+<h3 class="text-lg font-bold font-headline">Recent System Events</h3>
+<a class="text-xs font-bold text-primary hover:underline" href="#">View All Logs</a>
+</div>
+<div class="space-y-4 max-h-64 overflow-y-auto pr-4 no-scrollbar">
+<div class="flex items-start gap-4 p-4 rounded-xl hover:bg-white/60 transition-colors">
+<div class="w-2 h-2 mt-2 rounded-full bg-green-500 shrink-0 shadow-[0_0_8px_rgba(34,197,94,0.5)]"></div>
+<div class="flex-1">
+<p class="text-sm font-semibold">Post Scheduled Successfully</p>
+<p class="text-xs text-on-surface-variant mt-1">Carousel 'Summer_Look_04' queued for 18:00 UTC</p>
+</div>
+<span class="text-[10px] font-bold text-on-surface-variant whitespace-nowrap">09:42 AM</span>
+</div>
+<div class="flex items-start gap-4 p-4 rounded-xl hover:bg-white/60 transition-colors">
+<div class="w-2 h-2 mt-2 rounded-full bg-secondary shrink-0 shadow-[0_0_8px_rgba(128,55,177,0.5)]"></div>
+<div class="flex-1">
+<p class="text-sm font-semibold">Token Refresh Periodic Check</p>
+<p class="text-xs text-on-surface-variant mt-1">Validation handshake complete. No action required.</p>
+</div>
+<span class="text-[10px] font-bold text-on-surface-variant whitespace-nowrap">08:15 AM</span>
+</div>
+<div class="flex items-start gap-4 p-4 rounded-xl hover:bg-white/60 transition-colors">
+<div class="w-2 h-2 mt-2 rounded-full bg-primary-container shrink-0 shadow-[0_0_8px_rgba(255,107,184,0.5)]"></div>
+<div class="flex-1">
+<p class="text-sm font-semibold">Metadata Scrubbed</p>
+<p class="text-xs text-on-surface-variant mt-1">EXIF data removed from 12 newly uploaded assets.</p>
+</div>
+<span class="text-[10px] font-bold text-on-surface-variant whitespace-nowrap">07:50 AM</span>
+</div>
+</div>
+<!-- Bottom Fade Overlay -->
+<div class="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white/60 to-transparent pointer-events-none"></div>
+</div>
+</div>
+</main>
+<!-- Contextual FAB (Restricted to Dashboard) -->
+<button class="fixed bottom-10 right-10 w-16 h-16 rounded-full bg-gradient-to-br from-primary to-primary-container text-white shadow-[0px_8px_24px_rgba(169,31,113,0.3)] flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-50 group">
+<span class="material-symbols-outlined text-2xl group-hover:rotate-90 transition-transform">bolt</span>
+</button>
+</body></html>

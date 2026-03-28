@@ -20,11 +20,12 @@ function isReelStillProcessingError(error) {
 
 function isTunnelOrUrlError(error) {
   const msg = String(error?.message || "").toLowerCase();
-  const errorCode = error?.response?.data?.error?.code;
+  const errorCode = Number(error?.response?.data?.error?.code || error?.instagramErrorCode || 0);
+  const normalizedCode = String(error?.code || "").toUpperCase();
   
   // Error 2207076 = Instagram media processing failed (usually URL unreachable or format issue)
   // Error 2207076 is non-retryable - need setup fix
-  if (errorCode === 2207076 || msg.includes("2207076")) {
+  if (errorCode === 2207076 || normalizedCode === "INSTAGRAM_2207076" || msg.includes("2207076")) {
     return true;
   }
   
@@ -42,11 +43,17 @@ function isTunnelOrUrlError(error) {
 
 function isRetryableInstagramError(error) {
   const msg = String(error?.message || "").toLowerCase();
-  const errorCode = error?.response?.data?.error?.code;
+  const errorCode = Number(error?.response?.data?.error?.code || error?.instagramErrorCode || 0);
 
   // Non-retryable errors:
   if (
+    errorCode === 190 ||
+    errorCode === 10 ||
+    errorCode === 200 ||
     msg.includes("invalid") ||
+    msg.includes("expired") ||
+    msg.includes("permission") ||
+    msg.includes("access token") ||
     msg.includes("only photo or video can be accepted") ||
     msg.includes("unsupported") ||
     isTunnelOrUrlError(error)

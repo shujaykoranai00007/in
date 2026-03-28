@@ -8,6 +8,7 @@ import { spawn } from "child_process";
 import { Post } from "../models/Post.js";
 import { fileURLToPath } from "url";
 import { getRedditAnimeCandidates } from "./anime-fetch.service.js";
+import { uploadFile as uploadToGoogleDrive } from "./google-drive.service.js";
 
 const SLOT_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const DEFAULT_SLOTS = ["09:00", "12:30", "18:00"];
@@ -605,10 +606,25 @@ async function prepareReelWithAudio(candidate) {
       throw new Error(`Reel muxing produced empty file (0 bytes)`);
     }
 
-    const mediaUrl = `${getPublicBaseUrl()}/media/${outputName}`;
+    // For hosted Render backend, upload to Google Drive instead of using ephemeral /uploads
+    // Public base URL check ensures we upload for persistent hosts, not local/frontend-only
+    const isHostedRender = getPublicBaseUrl().includes(".onrender.com");
     
-    // Accept locally-verified files. Instagram Graph API will validate URL reachability at upload time.
-    // (Remote reachability checks can fail through tunnels/proxies even if Instagram can reach it)
+    if (isHostedRender) {
+      try {
+        console.log(`[AUTO ANIME] 📤 Uploading reel to Google Drive for persistent storage...`);
+        const driveResult = await uploadToGoogleDrive(outputPath, outputName, "reel");
+        console.log(`[AUTO ANIME] ✅ Google Drive upload complete: ${driveResult.fileId}`);
+        return driveResult.mediaUrl;
+      } catch (driveError) {
+        // Fallback to local /media path if Drive upload fails
+        console.warn(`[AUTO ANIME] ⚠️  Google Drive upload failed, falling back to local /media:`, driveError?.message);
+        return `${getPublicBaseUrl()}/media/${outputName}`;
+      }
+    }
+
+    // For localhost/development, serve from local /uploads directory
+    const mediaUrl = `${getPublicBaseUrl()}/media/${outputName}`;
     return mediaUrl;
   } catch (error) {
     console.error("Failed to prepare reel with audio", error?.message || error);

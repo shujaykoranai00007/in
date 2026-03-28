@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Instaflow - Schedule Post</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container-low": "#eff1f2",
+              "surface-dim": "#d1d5d7",
+              "tertiary-dim": "#a40008",
+              "primary-fixed-dim": "#f15cab",
+              "on-tertiary": "#ffefed",
+              "on-secondary-container": "#6a1d9b",
+              "surface-container": "#e6e8ea",
+              "surface-container-highest": "#dadddf",
+              "on-tertiary-container": "#690003",
+              "on-error": "#ffefef",
+              "on-background": "#2c2f30",
+              "primary-container": "#ff6bb8",
+              "secondary-fixed": "#eac4ff",
+              "tertiary-fixed-dim": "#ff7b6c",
+              "on-tertiary-fixed-variant": "#7a0004",
+              "on-error-container": "#510017",
+              "error": "#b41340",
+              "inverse-primary": "#f45fae",
+              "surface-container-lowest": "#ffffff",
+              "on-surface-variant": "#595c5d",
+              "error-container": "#f74b6d",
+              "on-secondary-fixed": "#530081",
+              "primary-fixed": "#ff6bb8",
+              "outline-variant": "#abadae",
+              "secondary-container": "#eac4ff",
+              "secondary-fixed-dim": "#e2b1ff",
+              "on-primary-container": "#4a002e",
+              "on-primary": "#ffeff3",
+              "tertiary-fixed": "#ff9285",
+              "secondary": "#8037b1",
+              "surface-bright": "#f5f6f7",
+              "inverse-surface": "#0c0f10",
+              "primary-dim": "#990b64",
+              "surface-variant": "#dadddf",
+              "outline": "#757778",
+              "inverse-on-surface": "#9b9d9e",
+              "tertiary": "#bb000a",
+              "on-primary-fixed-variant": "#5b0039",
+              "surface": "#f5f6f7",
+              "tertiary-container": "#ff9285",
+              "on-secondary": "#fdeeff",
+              "surface-tint": "#a91f71",
+              "on-tertiary-fixed": "#3a0001",
+              "on-secondary-fixed-variant": "#742aa5",
+              "background": "#f5f6f7",
+              "secondary-dim": "#7329a4",
+              "surface-container-high": "#e0e3e4",
+              "error-dim": "#a70138",
+              "primary": "#a91f71",
+              "on-primary-fixed": "#000000",
+              "on-surface": "#2c2f30"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3 { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .glass-nav {
+          -webkit-backdrop-filter: blur(24px);
+          backdrop-filter: blur(24px);
+        }
+        .icon-fill-1 {
+          font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface selection:bg-primary-container/30">
+<!-- SideNavBar (from Shared Components JSON) -->
+<aside class="h-screen w-64 fixed left-0 top-0 z-40 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-xl flex flex-col p-6 gap-2 shadow-[4px_0px_20px_rgba(169,31,113,0.04)]">
+<div class="mb-8 px-4">
+<span class="text-2xl font-black bg-gradient-to-br from-fuchsia-600 to-pink-500 bg-clip-text text-transparent">Instaflow</span>
+<p class="text-xs font-semibold tracking-tight text-slate-500 mt-1 uppercase">Premium Scheduler</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-fuchsia-600 transition-colors font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold hover:bg-white/50 rounded-xl" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span> Control
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-800 text-fuchsia-700 dark:text-fuchsia-300 rounded-xl shadow-sm scale-[1.02] transition-all font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold" href="#">
+<span class="material-symbols-outlined icon-fill-1" data-icon="calendar_month">calendar_month</span> Schedule
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-fuchsia-600 transition-colors font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold hover:bg-white/50 rounded-xl" href="#">
+<span class="material-symbols-outlined" data-icon="sensors">sensors</span> Live Monitor
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-fuchsia-600 transition-colors font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold hover:bg-white/50 rounded-xl" href="#">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span> Insights
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-fuchsia-600 transition-colors font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold hover:bg-white/50 rounded-xl" href="#">
+<span class="material-symbols-outlined" data-icon="auto_awesome">auto_awesome</span> Anime Auto
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-fuchsia-600 transition-colors font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold hover:bg-white/50 rounded-xl" href="#">
+<span class="material-symbols-outlined" data-icon="layers">layers</span> Queued Posts
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-fuchsia-600 transition-colors font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold hover:bg-white/50 rounded-xl" href="#">
+<span class="material-symbols-outlined" data-icon="history">history</span> History
+            </a>
+</nav>
+<button class="mt-auto w-full bg-gradient-to-br from-primary to-primary-container text-on-primary py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg hover:scale-[1.02] active:scale-95 transition-all">
+<span class="material-symbols-outlined" data-icon="add_circle">add_circle</span>
+            New Post
+        </button>
+</aside>
+<!-- TopAppBar -->
+<header class="fixed top-0 right-0 left-64 h-20 z-30 bg-white/70 dark:bg-slate-950/70 backdrop-blur-2xl flex justify-between items-center px-12">
+<div class="flex items-center gap-4">
+<div class="relative w-96">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input aria-label="form field" title="form-field" class="w-full bg-surface-container-high border-none rounded-xl pl-12 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/20" placeholder="Search scheduled content..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="dark_mode">dark_mode</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors relative">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-primary rounded-full"></span>
+</button>
+<div class="flex items-center gap-3 pl-4 border-l border-outline-variant/20">
+<div class="text-right">
+<p class="text-sm font-bold text-on-surface">Alex Rivera</p>
+<p class="text-[10px] uppercase tracking-widest text-on-surface-variant font-semibold">Pro Plan</p>
+</div>
+<img class="w-10 h-10 rounded-full object-cover ring-2 ring-primary/10" alt="close up portrait of a smiling creative professional in a studio setting with soft warm lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCcfEqsYzvo97sEbOZp0-GPAwVEStwUy2jehkoN9j3-xXBV1mRJ61W49M3vu0LVSDH7ELhh53Wpi3HNxTCqee5bOKZ_jxNTYs9Iycl3UD8wet5FTyd8ZQ5jvkPBKdd3AkQQktJDZ1LsvP-te1hEDXEIDA2Rtt8cToM7WmYE6sIrS5R1cvGX0o9B3Kt9dQYV1_mxuy6uch6gwS3GXi5vSE3NgvMcPeI74VYYTnz6SexeF-JnL4N28b9JLQgtBAKpB0k_23x5xy7f_wHe"/>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="pl-64 pt-20 min-h-screen bg-surface">
+<div class="max-w-6xl mx-auto p-12">
+<header class="mb-12">
+<h1 class="text-4xl font-extrabold tracking-tight text-on-surface mb-2">Schedule Post</h1>
+<p class="text-on-surface-variant max-w-2xl">Create and curate your next masterpiece. Manage media, craft captions, and select the perfect moment to connect with your audience.</p>
+</header>
+<div class="grid grid-cols-12 gap-8 items-start">
+<!-- Form Section (Left & Center) -->
+<div class="col-span-8 space-y-8">
+<!-- Media Upload Section -->
+<section class="bg-surface-container-lowest rounded-xl p-8 shadow-[0px_12px_40px_rgba(0,0,0,0.03)]">
+<div class="flex items-center justify-between mb-6">
+<h2 class="text-lg font-bold flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">perm_media</span>
+                                Content Media
+                            </h2>
+<div class="flex bg-surface-container-low p-1 rounded-lg">
+<button class="px-4 py-1.5 rounded-md text-xs font-bold bg-white text-primary shadow-sm">Local File</button>
+<button class="px-4 py-1.5 rounded-md text-xs font-bold text-on-surface-variant hover:text-on-surface transition-colors">URL / Cloud</button>
+</div>
+</div>
+<div class="border-2 border-dashed border-outline-variant/30 rounded-xl p-12 flex flex-col items-center justify-center bg-surface/50 hover:bg-primary/5 transition-colors group cursor-pointer">
+<div class="w-16 h-16 bg-primary-container/20 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="cloud_upload">cloud_upload</span>
+</div>
+<p class="font-bold text-on-surface mb-1">Drag and drop your media here</p>
+<p class="text-xs text-on-surface-variant">MP4, JPG, or PNG up to 50MB (Recommended: 1080x1350px)</p>
+<button class="mt-6 px-6 py-2 bg-on-surface text-surface text-xs font-bold rounded-lg hover:opacity-90 transition-opacity">Browse Files</button>
+</div>
+</section>
+<!-- Details Section -->
+<section class="bg-surface-container-lowest rounded-xl p-8 shadow-[0px_12px_40px_rgba(0,0,0,0.03)] space-y-6">
+<h2 class="text-lg font-bold flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">edit_note</span>
+                            Post Details
+                        </h2>
+<div class="space-y-2">
+<label class="text-[10px] uppercase tracking-widest font-bold text-on-surface-variant px-1">Caption</label>
+<textarea aria-label="form field" title="form-field" class="w-full min-h-[160px] bg-surface-container-high border-none rounded-xl p-4 text-on-surface placeholder:text-outline focus:ring-2 focus:ring-primary/20 resize-none" placeholder="Write something captivating..."></textarea>
+<div class="flex justify-between items-center px-1">
+<button class="text-primary text-xs font-bold flex items-center gap-1 hover:underline">
+<span class="material-symbols-outlined text-sm">auto_awesome</span> Generate with AI
+                                </button>
+<span class="text-[10px] text-on-surface-variant font-medium">0 / 2200</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-6">
+<div class="space-y-2">
+<label class="text-[10px] uppercase tracking-widest font-bold text-on-surface-variant px-1">Hashtags</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">tag</span>
+<input aria-label="form field" title="form-field" class="w-full bg-surface-container-high border-none rounded-xl pl-9 pr-4 py-3 text-sm focus:ring-2 focus:ring-primary/20" placeholder="Add hashtags..." type="text"/>
+</div>
+</div>
+<div class="space-y-2">
+<label class="text-[10px] uppercase tracking-widest font-bold text-on-surface-variant px-1">Keywords</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">label</span>
+<input aria-label="form field" title="form-field" class="w-full bg-surface-container-high border-none rounded-xl pl-9 pr-4 py-3 text-sm focus:ring-2 focus:ring-primary/20" placeholder="Add SEO keywords..." type="text"/>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Scheduling & Controls (Right) -->
+<div class="col-span-4 space-y-8">
+<!-- Post Type Selector -->
+<section class="bg-surface-container-lowest rounded-xl p-8 shadow-[0px_12px_40px_rgba(0,0,0,0.03)]">
+<h2 class="text-sm font-bold mb-4 uppercase tracking-wider text-on-surface-variant">Post Type</h2>
+<div class="flex flex-col gap-3">
+<label class="flex items-center justify-between p-4 bg-secondary-container/30 border border-secondary/20 rounded-xl cursor-pointer group">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-secondary/10 rounded-lg flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined" data-icon="movie">movie</span>
+</div>
+<div>
+<p class="font-bold text-sm">Instagram Reel</p>
+<p class="text-[10px] text-on-secondary-fixed-variant">Best for reach</p>
+</div>
+</div>
+<input aria-label="form field" title="form-field" checked="" class="w-5 h-5 text-primary focus:ring-primary border-outline-variant" name="post_type" type="radio"/>
+</label>
+<label class="flex items-center justify-between p-4 hover:bg-surface-container transition-colors rounded-xl cursor-pointer group">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-surface-container-high rounded-lg flex items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="image">image</span>
+</div>
+<div>
+<p class="font-bold text-sm">Static Image</p>
+<p class="text-[10px] text-on-surface-variant">Best for aesthetics</p>
+</div>
+</div>
+<input aria-label="form field" title="form-field" class="w-5 h-5 text-primary focus:ring-primary border-outline-variant" name="post_type" type="radio"/>
+</label>
+</div>
+</section>
+<!-- Timing Section -->
+<section class="bg-surface-container-lowest rounded-xl p-8 shadow-[0px_12px_40px_rgba(0,0,0,0.03)] space-y-6">
+<h2 class="text-sm font-bold mb-4 uppercase tracking-wider text-on-surface-variant">Scheduling</h2>
+<div class="space-y-4">
+<div class="space-y-2">
+<label class="text-[10px] font-bold text-on-surface-variant px-1">Select Date</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">calendar_today</span>
+<input aria-label="form field" title="form-field" class="w-full bg-surface-container-high border-none rounded-xl pl-9 pr-4 py-3 text-sm focus:ring-2 focus:ring-primary/20" type="date" value="2023-10-24"/>
+</div>
+</div>
+<div class="space-y-2">
+<label class="text-[10px] font-bold text-on-surface-variant px-1">Select Time</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">schedule</span>
+<input aria-label="form field" title="form-field" class="w-full bg-surface-container-high border-none rounded-xl pl-9 pr-4 py-3 text-sm focus:ring-2 focus:ring-primary/20" type="time" value="18:30"/>
+</div>
+</div>
+</div>
+<div class="p-4 bg-primary/5 rounded-xl border border-primary/10">
+<p class="text-[10px] text-primary font-bold uppercase tracking-widest mb-1">Recommendation</p>
+<p class="text-xs text-on-surface leading-relaxed">Your audience is most active at <span class="font-bold">7:45 PM</span> on Tuesdays. Would you like to optimize?</p>
+<button class="mt-2 text-xs font-bold text-primary hover:underline">Apply Smart Time</button>
+</div>
+</section>
+<!-- Primary Actions -->
+<div class="space-y-3">
+<button class="w-full py-4 bg-gradient-to-br from-primary to-primary-container text-on-primary rounded-xl font-bold text-base shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined icon-fill-1" data-icon="rocket_launch">rocket_launch</span>
+                            Schedule Post
+                        </button>
+<button class="w-full py-4 bg-surface-container-low text-on-surface-variant rounded-xl font-bold text-sm hover:bg-surface-container transition-colors">
+                            Save as Draft
+                        </button>
+</div>
+<!-- Post Preview Quick Look -->
+<div class="relative group cursor-zoom-in">
+<img class="w-full h-48 object-cover rounded-xl grayscale group-hover:grayscale-0 transition-all duration-500" alt="minimalist architectural photo of a modern concrete building with sharp shadows under a bright blue sky" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAA_yBeTnVDuadWOXAqBh8wWvKlAlsi0jpgbgaWXWhIgsvvq0j01ttlLUEEQ-x6F_g6wm6Lh9yK9xXmuj848iF-7MvonNjGnXrLlJiXXA7dClpVUhB9F0NXoQdV_uO_5xN-KUkiuEtN-iezsccJp4fDdJQaEvgOtm4JM_l0Hsy6AlMvrT8Jix49vOJXcVDp-kdD0McxouaQOmGcJvUhzx0ZEXa71HvN5IxgHLD6uCdSj4bK36pi3iTZRNuTwqFeiQCjMJW6z0cpyIHo"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-4 rounded-xl">
+<p class="text-white font-bold text-xs">Post Preview</p>
+<p class="text-white/70 text-[10px]">Click to see full mobile render</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- FAB (Suppressed based on context: Details/Form Screens) -->
+<!-- Navigation Shell handled via SideNavBar and TopAppBar -->
+</body></html>

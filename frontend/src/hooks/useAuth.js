@@ -4,6 +4,23 @@ import api from "../services/api";
 const TOKEN_KEY = "auth_token";
 const USER_KEY = "auth_user";
 
+function shouldBypassLogin() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const flag = String(import.meta.env.VITE_BYPASS_LOGIN || "").toLowerCase() === "true";
+  const isLocalhost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+  return flag && isLocalhost;
+}
+
+function getBypassUser() {
+  return {
+    email: "local-admin@instaflow.dev",
+    name: "Local Admin"
+  };
+}
+
 function readToken() {
   return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
 }
@@ -14,8 +31,9 @@ function readUser() {
 }
 
 export function useAuth() {
-  const [token, setToken] = useState(readToken());
-  const [user, setUser] = useState(readUser());
+  const bypassEnabled = shouldBypassLogin();
+  const [token, setToken] = useState(() => (bypassEnabled ? "local-bypass-token" : readToken()));
+  const [user, setUser] = useState(() => (bypassEnabled ? getBypassUser() : readUser()));
   const [instagramStatus, setInstagramStatus] = useState(null);
 
   async function validateSession() {
@@ -31,6 +49,18 @@ export function useAuth() {
 
   useEffect(() => {
     let mounted = true;
+
+    if (bypassEnabled) {
+      // Keep storage in sync so axios interceptor can send auth header in localhost bypass mode.
+      sessionStorage.setItem(TOKEN_KEY, "local-bypass-token");
+      sessionStorage.setItem(USER_KEY, JSON.stringify(getBypassUser()));
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+      setInstagramStatus({ valid: true, username: "local-bypass" });
+      return () => {
+        mounted = false;
+      };
+    }
 
     if (token) {
       sessionStorage.setItem(TOKEN_KEY, token);
@@ -59,9 +89,14 @@ export function useAuth() {
     return () => {
       mounted = false;
     };
-  }, [token]);
+  }, [token, bypassEnabled]);
 
   async function validateInstagramToken() {
+    if (bypassEnabled) {
+      setInstagramStatus({ valid: true, username: "local-bypass" });
+      return;
+    }
+
     try {
       const { data } = await api.get("/auth/instagram-token-status");
       setInstagramStatus({ valid: true, username: data.username });
@@ -73,6 +108,14 @@ export function useAuth() {
   }
 
   async function login(email, password) {
+    if (bypassEnabled) {
+      const nextUser = getBypassUser();
+      setToken("local-bypass-token");
+      setUser(nextUser);
+      setInstagramStatus({ valid: true, username: "local-bypass" });
+      return;
+    }
+
     const { data } = await api.post("/auth/login", { email, password });
     setToken(data.token);
     setUser(data.user);
@@ -84,6 +127,11 @@ export function useAuth() {
   }
 
   function logout() {
+    if (bypassEnabled) {
+      // Keep local bypass active during dev preview sessions.
+      return;
+    }
+
     setToken(null);
     setUser(null);
     setInstagramStatus(null);

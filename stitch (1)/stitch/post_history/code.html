@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Instaflow - Post History</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container-low": "#eff1f2",
+              "surface-dim": "#d1d5d7",
+              "tertiary-dim": "#a40008",
+              "primary-fixed-dim": "#f15cab",
+              "on-tertiary": "#ffefed",
+              "on-secondary-container": "#6a1d9b",
+              "surface-container": "#e6e8ea",
+              "surface-container-highest": "#dadddf",
+              "on-tertiary-container": "#690003",
+              "on-error": "#ffefef",
+              "on-background": "#2c2f30",
+              "primary-container": "#ff6bb8",
+              "secondary-fixed": "#eac4ff",
+              "tertiary-fixed-dim": "#ff7b6c",
+              "on-tertiary-fixed-variant": "#7a0004",
+              "on-error-container": "#510017",
+              "error": "#b41340",
+              "inverse-primary": "#f45fae",
+              "surface-container-lowest": "#ffffff",
+              "on-surface-variant": "#595c5d",
+              "error-container": "#f74b6d",
+              "on-secondary-fixed": "#530081",
+              "primary-fixed": "#ff6bb8",
+              "outline-variant": "#abadae",
+              "secondary-container": "#eac4ff",
+              "secondary-fixed-dim": "#e2b1ff",
+              "on-primary-container": "#4a002e",
+              "on-primary": "#ffeff3",
+              "tertiary-fixed": "#ff9285",
+              "secondary": "#8037b1",
+              "surface-bright": "#f5f6f7",
+              "inverse-surface": "#0c0f10",
+              "primary-dim": "#990b64",
+              "surface-variant": "#dadddf",
+              "outline": "#757778",
+              "inverse-on-surface": "#9b9d9e",
+              "tertiary": "#bb000a",
+              "on-primary-fixed-variant": "#5b0039",
+              "surface": "#f5f6f7",
+              "tertiary-container": "#ff9285",
+              "on-secondary": "#fdeeff",
+              "surface-tint": "#a91f71",
+              "on-tertiary-fixed": "#3a0001",
+              "on-secondary-fixed-variant": "#742aa5",
+              "background": "#f5f6f7",
+              "secondary-dim": "#7329a4",
+              "surface-container-high": "#e0e3e4",
+              "error-dim": "#a70138",
+              "primary": "#a91f71",
+              "on-primary-fixed": "#000000",
+              "on-surface": "#2c2f30"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #f5f6f7; }
+        .headline-font { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .glass-panel { -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); }
+        .icon-fill-1 { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    </style>
+</head>
+<body class="text-on-surface overflow-x-hidden">
+<!-- SideNavBar (Shared Component) -->
+<aside class="h-screen w-64 fixed left-0 top-0 z-40 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-[4px_0px_20px_rgba(169,31,113,0.04)] flex flex-col p-6 gap-2">
+<div class="mb-8 px-4">
+<h1 class="text-2xl font-black bg-gradient-to-br from-fuchsia-600 to-pink-500 bg-clip-text text-transparent font-['Plus_Jakarta_Sans'] tracking-tight">Instaflow</h1>
+<p class="text-xs font-semibold text-slate-500 tracking-wider mt-1">Premium Scheduler</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-fuchsia-600 dark:hover:text-fuchsia-300 transition-colors font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold" href="#">
+<span class="material-symbols-outlined">dashboard</span> Control
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-fuchsia-600 dark:hover:text-fuchsia-300 transition-colors font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold" href="#">
+<span class="material-symbols-outlined">calendar_month</span> Schedule
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-fuchsia-600 dark:hover:text-fuchsia-300 transition-colors font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold" href="#">
+<span class="material-symbols-outlined">sensors</span> Live Monitor
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-fuchsia-600 dark:hover:text-fuchsia-300 transition-colors font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold" href="#">
+<span class="material-symbols-outlined">analytics</span> Insights
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-fuchsia-600 dark:hover:text-fuchsia-300 transition-colors font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold" href="#">
+<span class="material-symbols-outlined">auto_awesome</span> Anime Auto
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-fuchsia-600 dark:hover:text-fuchsia-300 transition-colors font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold" href="#">
+<span class="material-symbols-outlined">layers</span> Queued Posts
+            </a>
+<!-- ACTIVE TAB: History -->
+<a class="flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-800 text-fuchsia-700 dark:text-fuchsia-300 rounded-xl shadow-sm scale-[1.02] transition-all font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold" href="#">
+<span class="material-symbols-outlined">history</span> History
+            </a>
+</nav>
+<button class="mt-auto bg-gradient-to-br from-primary to-primary-container text-on-primary font-headline font-bold py-4 rounded-xl shadow-lg hover:scale-[1.02] active:scale-95 transition-all">
+            New Post
+        </button>
+</aside>
+<!-- TopAppBar (Shared Component) -->
+<header class="fixed top-0 right-0 left-64 h-20 z-30 bg-white/70 dark:bg-slate-950/70 backdrop-blur-2xl flex justify-between items-center px-12">
+<div class="flex items-center gap-4 bg-surface-container-low px-4 py-2 rounded-full w-96">
+<span class="material-symbols-outlined text-outline">search</span>
+<input aria-label="form field" title="form-field" class="bg-transparent border-none focus:ring-0 text-sm w-full" placeholder="Search history..." type="text"/>
+</div>
+<div class="flex items-center gap-6">
+<button class="p-2 text-on-surface-variant hover:scale-105 transition-transform">
+<span class="material-symbols-outlined">dark_mode</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:scale-105 transition-transform relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full"></span>
+</button>
+<div class="flex items-center gap-3 ml-2 border-l border-outline-variant/20 pl-6">
+<div class="text-right">
+<p class="text-xs font-bold font-headline">Profile Settings</p>
+<p class="text-[10px] text-on-surface-variant">Admin Access</p>
+</div>
+<img class="w-10 h-10 rounded-full object-cover ring-2 ring-primary/20" alt="close-up portrait of a professional man with a friendly expression in a modern office environment" title="close-up portrait of a professional man with a friendly expression in a modern office environment" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDX0-DF0Uk2Nck5G52Wv4l4h986e58mkRq1G3Xyd9v1tH8sMdmP85MiF1egJSbFe8CjRleibxLbkaYUmy38G_xTpMxpungYPrlh6Q8dZ4QKL8Nki-bwyvSqSFU5ZApR9I0LZUneAjqHmGunYs5t43l-ALUp7VTjkwtu9wGeAgPt5_lQ3XHgX7_88GpvOCqN3NQOD7V2vcmtmTjPFe0UiLr2CwTnyl3TmZGSv5uLMF2wr2TGg_8RZRxHoa31QYtTQucIsgr56vIULLQW"/>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-64 pt-20 min-h-screen p-12">
+<!-- Header Section -->
+<section class="mb-12">
+<h2 class="text-4xl font-headline font-extrabold tracking-tighter text-on-surface mb-2">History</h2>
+<p class="text-on-surface-variant max-w-2xl">Review your past performance, analyze engagement metrics of posted content, and troubleshoot delivery issues.</p>
+</section>
+<!-- Filter Bar -->
+<section class="mb-8 flex flex-wrap items-center justify-between gap-6">
+<div class="flex items-center gap-4 overflow-x-auto pb-2 scrollbar-hide">
+<button class="px-6 py-2.5 bg-surface-container-lowest text-primary font-label text-xs font-bold tracking-widest uppercase rounded-full shadow-sm hover:bg-white transition-all">
+                    All Activity
+                </button>
+<button class="px-6 py-2.5 bg-surface-container text-on-surface-variant font-label text-xs font-bold tracking-widest uppercase rounded-full hover:bg-surface-container-high transition-all">
+                    Posted
+                </button>
+<button class="px-6 py-2.5 bg-surface-container text-on-surface-variant font-label text-xs font-bold tracking-widest uppercase rounded-full hover:bg-surface-container-high transition-all">
+                    Failed
+                </button>
+<button class="px-6 py-2.5 bg-surface-container text-on-surface-variant font-label text-xs font-bold tracking-widest uppercase rounded-full hover:bg-surface-container-high transition-all">
+                    Reels Only
+                </button>
+</div>
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-2 bg-surface-container px-4 py-2.5 rounded-xl text-sm font-medium text-on-surface-variant">
+<span class="material-symbols-outlined text-sm">calendar_today</span>
+<span>Last 30 Days</span>
+<span class="material-symbols-outlined text-sm ml-2">expand_more</span>
+</div>
+<button class="flex items-center gap-2 px-4 py-2.5 bg-secondary-container text-on-secondary-container rounded-xl text-sm font-bold transition-all hover:scale-[1.02]">
+<span class="material-symbols-outlined text-sm">download</span>
+                    Export CSV
+                </button>
+</div>
+</section>
+<!-- History Grid (Bento Style/Table Hybrid) -->
+<div class="space-y-6">
+<!-- Item 1: Posted Successfully -->
+<div class="group relative bg-surface-container-lowest rounded-2xl p-6 flex flex-col md:flex-row items-center gap-8 transition-all hover:shadow-[0px_12px_40px_rgba(0,0,0,0.03)]">
+<div class="w-full md:w-48 h-32 rounded-xl overflow-hidden flex-shrink-0 relative">
+<img class="w-full h-full object-cover" alt="minimalist aesthetic photo of a cup of coffee and an open laptop on a white desk with soft shadows" title="minimalist aesthetic photo of a cup of coffee and an open laptop on a white desk with soft shadows" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCfW7_GT1zruxd73BZkTv74a_CiGUxwOJPothEhxGCaoMmDFrIifk0-8-7_9fwZkMM05SeoV3_EZ_4WxenICHWOcxxFEILN_I0CRC9URdUO472qA_hfxFTZv1t9ZeOrAofXOpmeD8L46sqI8l105Gr57a0vdslxAj6wNz-2uOZmDC6FfqHx3GPQmgnP1qlHz-WTYdBhTHj-ewttA5H_IkLsMotR_TKmtuXJgZCYKfBACdCYMDLQcH4WNJuhABKaPxYqw614nbpt53C1"/>
+<div class="absolute top-2 left-2 px-2 py-1 bg-black/40 backdrop-blur-md rounded text-[10px] text-white font-bold uppercase tracking-widest">Post</div>
+</div>
+<div class="flex-1 space-y-2">
+<div class="flex items-center gap-3">
+<span class="px-3 py-1 bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest rounded-full">Posted</span>
+<span class="text-on-surface-variant text-xs font-medium">May 24, 2024 â€¢ 10:15 AM</span>
+</div>
+<h3 class="text-lg font-headline font-bold text-on-surface">The Future of Minimal Workspace Aesthetics</h3>
+<p class="text-on-surface-variant text-sm line-clamp-1 italic">"Creating space for creativity. Our latest deep-dive into workspace psychology is live! #minimalism #tech..."</p>
+</div>
+<div class="flex items-center gap-8 px-8 border-x border-outline-variant/10">
+<div class="text-center">
+<p class="text-xs font-bold text-on-surface-variant uppercase tracking-tighter">Reach</p>
+<p class="text-xl font-headline font-extrabold text-on-surface">12.4k</p>
+</div>
+<div class="text-center">
+<p class="text-xs font-bold text-on-surface-variant uppercase tracking-tighter">Likes</p>
+<p class="text-xl font-headline font-extrabold text-on-surface">842</p>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-3 text-on-surface-variant hover:bg-surface-container rounded-full transition-all">
+<span class="material-symbols-outlined">bar_chart_4_bars</span>
+</button>
+<button class="p-3 text-on-surface-variant hover:bg-surface-container rounded-full transition-all">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Item 2: Failed Post -->
+<div class="group relative bg-surface-container-lowest rounded-2xl p-6 flex flex-col md:flex-row items-center gap-8 transition-all hover:shadow-[0px_12px_40px_rgba(0,0,0,0.03)] ring-1 ring-error/5">
+<div class="w-full md:w-48 h-32 rounded-xl overflow-hidden flex-shrink-0 relative opacity-60 grayscale-[0.3]">
+<img class="w-full h-full object-cover" alt="vibrant abstract background with swirling neon pink and blue colors on a black surface" title="vibrant abstract background with swirling neon pink and blue colors on a black surface" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAbMG7Rww-4cj1sVF7pbcYd0YFzPC-a_s2Pkomi1ktCJ8Jv62J-u7VbmAghb8eVpIef7WN2efkYm16vql6TBMsnih3OTFD8i8Qt0CHsYtASq9osJL8NdOiLtD1C5c-Cv0AIRDyZDwYtULBbSonjIekl-ugEtciJn9dy2a8I32P_uu80OP-gs5Rb3LH7Y66sDNpXc_Ttq7TB6rA8nSqpW4UpQQopqAFtZUMosWw2D2NizUbICAsVWv1oWofwhhN2Vpfh0ia_AWgmbEP0"/>
+<div class="absolute top-2 left-2 px-2 py-1 bg-black/40 backdrop-blur-md rounded text-[10px] text-white font-bold uppercase tracking-widest">Reel</div>
+</div>
+<div class="flex-1 space-y-2">
+<div class="flex items-center gap-3">
+<span class="px-3 py-1 bg-error/10 text-error text-[10px] font-black uppercase tracking-widest rounded-full">Failed</span>
+<span class="text-on-surface-variant text-xs font-medium">May 23, 2024 â€¢ 06:45 PM</span>
+</div>
+<h3 class="text-lg font-headline font-bold text-on-surface">Weekly Tech Roundup: Neon Edition</h3>
+<div class="flex items-center gap-2 text-error text-xs font-semibold bg-error-container/10 p-2 rounded-lg">
+<span class="material-symbols-outlined text-sm">error_outline</span>
+<span>API Authentication Error: Token expired. Please re-sync Instagram account.</span>
+</div>
+</div>
+<div class="flex items-center gap-8 px-8 border-x border-outline-variant/10 opacity-30">
+<div class="text-center">
+<p class="text-xs font-bold text-on-surface-variant uppercase tracking-tighter">Reach</p>
+<p class="text-xl font-headline font-extrabold text-on-surface">â€”</p>
+</div>
+<div class="text-center">
+<p class="text-xs font-bold text-on-surface-variant uppercase tracking-tighter">Likes</p>
+<p class="text-xl font-headline font-extrabold text-on-surface">â€”</p>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary rounded-xl text-xs font-bold transition-all hover:scale-105">
+<span class="material-symbols-outlined text-sm">refresh</span>
+                        Retry Now
+                    </button>
+<button class="p-3 text-on-surface-variant hover:bg-surface-container rounded-full transition-all">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Item 3: Posted Successfully (Video) -->
+<div class="group relative bg-surface-container-lowest rounded-2xl p-6 flex flex-col md:flex-row items-center gap-8 transition-all hover:shadow-[0px_12px_40px_rgba(0,0,0,0.03)]">
+<div class="w-full md:w-48 h-32 rounded-xl overflow-hidden flex-shrink-0 relative">
+<img class="w-full h-full object-cover" alt="cinematic shot of a vintage computer and retro gaming gear on a shelf with purple ambient lighting" title="cinematic shot of a vintage computer and retro gaming gear on a shelf with purple ambient lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBeHPgziIj3fyzJQX_Nts7q_O8t8LPUfRMuWOUDuR1oOfIpr_Cmw7eLNSDDieOHlu56i9xzFiqcHBPPYivPr-vggO9YSczdsTn6e7qhxj5c60LAYQXXBszKNdjNQ0KuFbYpjNRrPCQEX2EVflWmScZa52sobYp6Bez4F1h2P-J5z_C9iva0mn-8JGfcuGUbjrtkHwfxp-EyD03OXwbK7t_NymCdrgE_UvkEPkFAoXlXmSn4TBKjNaNYWGMb6fOgxkaeNjVLGd8pWd_B"/>
+<div class="absolute top-2 left-2 px-2 py-1 bg-black/40 backdrop-blur-md rounded text-[10px] text-white font-bold uppercase tracking-widest">Carousel</div>
+<div class="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/10 transition-colors">
+<span class="material-symbols-outlined icon-fill-1 text-white text-3xl">play_circle</span>
+</div>
+</div>
+<div class="flex-1 space-y-2">
+<div class="flex items-center gap-3">
+<span class="px-3 py-1 bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest rounded-full">Posted</span>
+<span class="text-on-surface-variant text-xs font-medium">May 22, 2024 â€¢ 02:00 PM</span>
+</div>
+<h3 class="text-lg font-headline font-bold text-on-surface">Retro Tech: Why We're Obsessed with the 80s</h3>
+<p class="text-on-surface-variant text-sm line-clamp-1 italic">"From mechanical keyboards to CRT monitors, the aesthetic is back. Slide to see our favorites..."</p>
+</div>
+<div class="flex items-center gap-8 px-8 border-x border-outline-variant/10">
+<div class="text-center">
+<p class="text-xs font-bold text-on-surface-variant uppercase tracking-tighter">Reach</p>
+<p class="text-xl font-headline font-extrabold text-on-surface">45.2k</p>
+</div>
+<div class="text-center">
+<p class="text-xs font-bold text-on-surface-variant uppercase tracking-tighter">Likes</p>
+<p class="text-xl font-headline font-extrabold text-on-surface">3.1k</p>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-3 text-on-surface-variant hover:bg-surface-container rounded-full transition-all">
+<span class="material-symbols-outlined">bar_chart_4_bars</span>
+</button>
+<button class="p-3 text-on-surface-variant hover:bg-surface-container rounded-full transition-all">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Item 4: Failed Post (Validation) -->
+<div class="group relative bg-surface-container-lowest rounded-2xl p-6 flex flex-col md:flex-row items-center gap-8 transition-all hover:shadow-[0px_12px_40px_rgba(0,0,0,0.03)] ring-1 ring-error/5">
+<div class="w-full md:w-48 h-32 rounded-xl overflow-hidden flex-shrink-0 relative opacity-60 grayscale-[0.3]">
+<img class="w-full h-full object-cover" alt="top view of a desk with a laptop displaying code, a coffee mug, and a notebook on a dark wood surface" title="top view of a desk with a laptop displaying code, a coffee mug, and a notebook on a dark wood surface" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBvRPgLNsz5D094Q4dlhRQoU-9l__nNv9cPCiGmuAlmUCJu7eqSqL1W5EvmXAhA3P_4x7F3jxIGaoM7YX6ucXfzQqbMz3PmTX_A0isAoycmd5UsuF7ODmuI11hx625KZVL30sy_BKgQaCWv3SBcOBuuADoOvcDsjpoOC-mJvWxiAa4zhCBk7UTzX-wgmI2JzbhhiXrgpx5s-nM62gIW95BOd_zyB4UqYeyy88StZm0MycIM7nMwVgOi8N-uMchTj-rB2K3f2ta3mi4G"/>
+<div class="absolute top-2 left-2 px-2 py-1 bg-black/40 backdrop-blur-md rounded text-[10px] text-white font-bold uppercase tracking-widest">Story</div>
+</div>
+<div class="flex-1 space-y-2">
+<div class="flex items-center gap-3">
+<span class="px-3 py-1 bg-error/10 text-error text-[10px] font-black uppercase tracking-widest rounded-full">Failed</span>
+<span class="text-on-surface-variant text-xs font-medium">May 21, 2024 â€¢ 09:12 AM</span>
+</div>
+<h3 class="text-lg font-headline font-bold text-on-surface">Behind the Scenes: Coding the New Dashboard</h3>
+<div class="flex items-center gap-2 text-error text-xs font-semibold bg-error-container/10 p-2 rounded-lg">
+<span class="material-symbols-outlined text-sm">aspect_ratio</span>
+<span>Invalid Aspect Ratio: Stories must be 9:16. Detected 16:9.</span>
+</div>
+</div>
+<div class="flex items-center gap-8 px-8 border-x border-outline-variant/10 opacity-30">
+<div class="text-center">
+<p class="text-xs font-bold text-on-surface-variant uppercase tracking-tighter">Reach</p>
+<p class="text-xl font-headline font-extrabold text-on-surface">â€”</p>
+</div>
+<div class="text-center">
+<p class="text-xs font-bold text-on-surface-variant uppercase tracking-tighter">Likes</p>
+<p class="text-xl font-headline font-extrabold text-on-surface">â€”</p>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="flex items-center gap-2 px-5 py-2.5 bg-surface-container text-on-surface-variant rounded-xl text-xs font-bold transition-all hover:bg-surface-container-high">
+<span class="material-symbols-outlined text-sm">edit</span>
+                        Fix Ratio
+                    </button>
+<button class="p-3 text-on-surface-variant hover:bg-surface-container rounded-full transition-all">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Pagination -->
+<div class="mt-12 flex items-center justify-center gap-2">
+<button class="w-10 h-10 flex items-center justify-center rounded-xl bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-all">
+<span class="material-symbols-outlined text-sm">chevron_left</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-xl bg-primary text-on-primary font-bold shadow-md shadow-primary/20">1</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-xl bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-all font-bold">2</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-xl bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-all font-bold">3</button>
+<span class="mx-2 text-outline">...</span>
+<button class="w-10 h-10 flex items-center justify-center rounded-xl bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-all font-bold">12</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-xl bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-all">
+<span class="material-symbols-outlined text-sm">chevron_right</span>
+</button>
+</div>
+</main>
+<!-- Floating Action Feedback (Optional Toast) -->
+<div class="fixed bottom-8 right-8 bg-inverse-surface text-surface py-3 px-5 rounded-2xl shadow-2xl flex items-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+<span class="material-symbols-outlined text-primary-container">info</span>
+<p class="text-sm font-medium">History is automatically archived after 90 days.</p>
+<button class="text-primary-container font-bold text-xs uppercase tracking-widest ml-4">Learn More</button>
+</div>
+</body></html>

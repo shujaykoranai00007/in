@@ -1,0 +1,1422 @@
+{
+  "projectMetadata": {
+    "name": "InstaFlow Scheduler",
+    "version": "1.0.0",
+    "description": "Production-ready full-stack web application for scheduling Instagram reels and image posts with automated content fetching, processing, and publishing",
+    "author": "Jay Bhimani",
+    "deploymentStatus": {
+      "backend": "Render (Oregon region, free tier)",
+      "frontend": "Vercel",
+      "database": "MongoDB Atlas"
+    }
+  },
+
+  "projectOverview": {
+    "purpose": "Instagram automation platform for anime content creators",
+    "targetUsers": [
+      "Anime content creators and editors",
+      "Social media managers",
+      "Content schedulers",
+      "Instagram growth enthusiasts"
+    ],
+    "keyValue": [
+      "Automated content sourcing from Reddit",
+      "Instant reel posting with retry logic",
+      "Scheduled daily posting at configurable time slots",
+      "AI-powered caption generation",
+      "Real-time queue monitoring",
+      "Multi-format media support (video, images, mixed)"
+    ],
+    "coreFeatures": [
+      "Reddit anime content fetching and filtering",
+      "Manual media upload and URL import",
+      "Instagram instant posting (Run Now)",
+      "Daily scheduled posting at user-defined times",
+      "Automatic caption and hashtag generation",
+      "Real-time queue and post history tracking",
+      "Media transcoding and audio muxing",
+      "Theme customization with multiple color schemes",
+      "Desktop notifications for post events",
+      "Instagram account insights and metrics display"
+    ]
+  },
+
+  "techStack": {
+    "backend": {
+      "runtime": "Node.js (ES Modules)",
+      "framework": "Express.js v4.21.2",
+      "language": "JavaScript",
+      "database": "MongoDB v8.11.0 (Mongoose ODM)",
+      "keyDependencies": {
+        "axios": "^1.8.4 - HTTP client for API calls",
+        "cors": "^2.8.5 - Cross-origin request handling",
+        "dotenv": "^16.4.7 - Environment variable management",
+        "express": "^4.21.2 - Web framework",
+        "ffmpeg-static": "^5.2.0 - Binary for video processing",
+        "sharp": "^0.34.4 - Image processing and resizing",
+        "jsonwebtoken": "^9.0.2 - JWT authentication",
+        "multer": "^2.0.2 - File upload middleware",
+        "node-cron": "^3.0.3 - Task scheduling",
+        "form-data": "^4.0.4 - Multipart form data handling"
+      },
+      "devTools": {
+        "nodemon": "^3.1.9 - Auto-reload on file changes"
+      }
+    },
+    "frontend": {
+      "framework": "React v18.3.1",
+      "buildTool": "Vite v6.2.0",
+      "language": "JavaScript/JSX",
+      "styling": "Tailwind CSS v3.4.17",
+      "postCSS": "^8.5.3",
+      "keyDependencies": {
+        "axios": "^1.8.4 - HTTP API calls",
+        "react-dom": "^18.3.1 - React DOM rendering",
+        "react-router-dom": "^6.30.0 - Client-side routing",
+        "framer-motion": "^11.18.2 - Smooth animations",
+        "lucide-react": "^0.476.0 - Icon library",
+        "clsx": "^2.1.1 - CSS class utility"
+      },
+      "devTools": {
+        "@vitejs/plugin-react": "^4.3.4",
+        "autoprefixer": "^10.4.20",
+        "vite": "^6.2.0"
+      }
+    },
+    "infrastructure": {
+      "containerization": "Docker + Docker Compose",
+      "apis": [
+        "Instagram Graph API v19.0",
+        "Instagram Media Publishing API",
+        "Instagram Insights API",
+        "Reddit API (User-Agent based)",
+        "Facebook Graph API (for Instagram features)"
+      ],
+      "externalServices": [
+        "0x0.st - File hosting service",
+        "catbox.moe - Alternative file hosting"
+      ]
+    }
+  },
+
+  "uiStructure": {
+    "pages": [
+      {
+        "name": "LoginView",
+        "route": "/",
+        "components": ["LoginForm"],
+        "purpose": "Admin authentication",
+        "features": [
+          "Email/password login",
+          "JWT token generation",
+          "Error handling and feedback"
+        ]
+      },
+      {
+        "name": "DashboardView",
+        "route": "/dashboard",
+        "isProtected": true,
+        "components": [
+          "Sidebar",
+          "ControlCenter",
+          "ScheduleTab",
+          "LiveMonitor",
+          "InsightsTab",
+          "AnimeAutomationTab",
+          "QueuedPostsTab",
+          "HistoryTab",
+          "ThemeSwitcher"
+        ],
+        "purpose": "Main application hub with multiple functional tabs",
+        "tabs": [
+          {
+            "id": "controlCenter",
+            "label": "Control",
+            "icon": "Gamepad2",
+            "features": ["Instagram token status", "Account quick actions"]
+          },
+          {
+            "id": "schedule",
+            "label": "Schedule",
+            "icon": "CalendarClock",
+            "features": [
+              "Manual post creation",
+              "Media upload (URL/file)",
+              "Caption and hashtag editor",
+              "Scheduled time picker",
+              "Post type selection (reel/image)"
+            ]
+          },
+          {
+            "id": "liveMonitor",
+            "label": "Live Monitor",
+            "icon": "Activity",
+            "features": ["Real-time activity feed", "Event notifications"]
+          },
+          {
+            "id": "insights",
+            "label": "Insights",
+            "icon": "Radar",
+            "features": [
+              "Instagram account metrics",
+              "Recent media performance stats",
+              "Engagement tracking"
+            ]
+          },
+          {
+            "id": "animeAutomation",
+            "label": "Anime Auto",
+            "icon": "Clapperboard",
+            "features": [
+              "Reddit source configuration",
+              "Daily schedule setup",
+              "Content filters (score, age, dimensions)",
+              "Run Now (instant posting)",
+              "One-click daily activation"
+            ]
+          },
+          {
+            "id": "pending",
+            "label": "Queued Posts",
+            "icon": "LayoutDashboard",
+            "features": [
+              "Pending posts table",
+              "Status tracking (pending/processing/posted/failed)",
+              "Post retry/cancel actions",
+              "Media deletion"
+            ]
+          },
+          {
+            "id": "history",
+            "label": "History",
+            "icon": "History",
+            "features": [
+              "All posted content timeline",
+              "Success/failure outcomes",
+              "Detailed error logs",
+              "Post performance data"
+            ]
+          }
+        ]
+      }
+    ],
+    "navigation": {
+      "mode": "Tab-based sidebar navigation",
+      "mobileLayout": "Bottom dock + floating header",
+      "desktopLayout": "Fixed left sidebar with orb-style navigation",
+      "navItems": [
+        "Control Center",
+        "Schedule Post",
+        "Live Monitor",
+        "Insights",
+        "Anime Automation",
+        "Queued Posts",
+        "History"
+      ]
+    },
+    "globalComponents": [
+      {
+        "name": "Sidebar",
+        "location": "frontend/src/components/Sidebar.jsx",
+        "purpose": "Navigation hub with mobile/desktop responsiveness",
+        "features": ["Tab switching", "User info display", "Logout button", "Mobile tooltips"]
+      },
+      {
+        "name": "DynamicIsland",
+        "location": "DashboardView.jsx embedded",
+        "purpose": "Real-time notification banner",
+        "states": ["success", "warning", "error", "info"]
+      },
+      {
+        "name": "ThemeSwitcher",
+        "location": "DashboardView.jsx embedded",
+        "purpose": "Color theme customization",
+        "themes": [
+          "Aurora (default cyan/teal)",
+          "Sunset (orange/warm)",
+          "Ocean (teal/blue)",
+          "Cyber Ice",
+          "Volt Purple",
+          "Lava Pop",
+          "Neon Forest",
+          "Midnight Mint"
+        ]
+      }
+    ],
+    "designSystem": {
+      "colors": {
+        "light": {
+          "bgBase": "#edf5ff",
+          "tintA": "#13e0b5",
+          "tintB": "#ff9c41",
+          "panelBg": "#f5fbff",
+          "panelBorder": "#2f8cbc",
+          "textMuted": "#37526a",
+          "accent": "#00a7cc",
+          "accentStrong": "#35e0b8",
+          "danger": "#ff5a6f"
+        }
+      },
+      "typography": {
+        "fonts": [
+          "Oxanium (headings, display)",
+          "Sora (body, UI)"
+        ],
+        "sizes": ["xs (0.75rem)", "sm (0.875rem)", "base (1rem)", "lg (1.125rem)", "xl (1.25rem)"]
+      },
+      "components": {
+        "glassPanels": "Frosted glass effect with backdrop blur and gradient borders",
+        "buttons": [
+          "pro-btn (gradient accent button)",
+          "ghost-btn (outline style)",
+          "tab-btn (tab selector)"
+        ],
+        "inputs": "field-base (text input with focus state)",
+        "cards": "rounded panels with shadow and hover effects",
+        "badges": "status-pill (small pill-shaped indicators)"
+      },
+      "effects": {
+        "animations": [
+          "fadeRise (entrance animation)",
+          "islandPulse (notification pulse)",
+          "smooth transitions on all interactive elements"
+        ],
+        "glassmorphism": "Blur + transparency layer system"
+      }
+    }
+  },
+
+  "featureBreakdown": {
+    "authentication": {
+      "flow": "Email/Password → JWT Token → Session Storage",
+      "implementation": {
+        "login": "POST /api/auth/login",
+        "validation": "GET /api/auth/me",
+        "tokenStorage": "sessionStorage (prefers) / localStorage (fallback)",
+        "expiresIn": "12 hours",
+        "onInvalidToken": "Auto-logout + redirect to login"
+      },
+      "files": [
+        "backend/src/routes/auth.routes.js",
+        "backend/src/middleware/auth.js",
+        "frontend/src/hooks/useAuth.js"
+      ]
+    },
+
+    "postCreationFlow": {
+      "steps": [
+        {
+          "step": 1,
+          "name": "Media Input",
+          "methods": [
+            "Upload file (mp4, jpg, png)",
+            "Paste URL (Reddit, Instagram, direct CDN)",
+            "Instagram post extraction (meta scraping)"
+          ],
+          "validation": "File size < 300MB, format support check"
+        },
+        {
+          "step": 2,
+          "name": "Media Processing",
+          "actions": [
+            "Download if URL",
+            "Detect media type (video/image/reel)",
+            "Check duration (reels < 90s)",
+            "Transcode if needed (sharp/ffmpeg)",
+            "Extract/mux audio if combining"
+          ]
+        },
+        {
+          "step": 3,
+          "name": "Caption Generation",
+          "mode": [
+            "Auto-generate (AI-suggested hooks, CTAs, hashtags)",
+            "Manual edit (full UI control)"
+          ],
+          "features": [
+            "Template-based generation",
+            "Keyword extraction from title",
+            "Rotating hashtag pools",
+            "Anime-specific hooks and CTAs"
+          ]
+        },
+        {
+          "step": 4,
+          "name": "Queue Setup",
+          "parameters": [
+            "Scheduled time (immediate or future)",
+            "Post type (reel or image post)",
+            "Caption and metadata"
+          ]
+        },
+        {
+          "step": 5,
+          "name": "Upload Execution",
+          "process": {
+            "instant": "processPostNow() - retry loop (max 4 attempts, 3.5s gaps)",
+            "scheduled": "Batch processor ticks every minute, executes due posts"
+          }
+        }
+      ],
+      "files": [
+        "frontend/src/components/DashboardView.jsx",
+        "backend/src/routes/post.routes.js",
+        "backend/src/services/media-extract.service.js",
+        "backend/src/services/caption-suggest.service.js"
+      ]
+    },
+
+    "schedulerLogic": {
+      "cronSchedule": "Every minute (node-cron)",
+      "dataModel": "Post document in MongoDB with status enum",
+      "postStatuses": [
+        "pending - Waiting to be processed",
+        "processing - Currently attempting Instagram upload",
+        "posted - Successfully published",
+        "failed - Exhausted retries or non-recoverable error"
+      ],
+      "automationFlow": {
+        "step1": "Check AutoAnimeConfig.enabled",
+        "step2": "Fetch Reddit anime candidates (based on subreddits, filters)",
+        "step3": "Filter by: score, dimensions, age, keywords",
+        "step4": "Create Post document + queue at scheduledTime",
+        "step5": "processPendingPosts() finds due posts and uploads",
+        "step6": "Retry logic: pending-processing → pending-retry → failed"
+      },
+      "retryMechanism": {
+        "maxRetries": 3,
+        "retryGapSeconds": 60,
+        "reelWaitRetryMinutes": 1,
+        "staleProcTimeout": 8,
+        "nonRetryableErrors": [
+          "Invalid media format",
+          "Unsupported file type",
+          "2207076 (Instagram download failed)",
+          "Publicly unreachable URL"
+        ]
+      },
+      "files": [
+        "backend/src/scheduler/cron.js",
+        "backend/src/services/scheduler.service.js",
+        "backend/src/services/anime-automation.service.js"
+      ]
+    },
+
+    "instantPosting": {
+      "endpoint": "POST /api/auto-anime/run-now",
+      "behavior": "Bypasses batch queue, directly processes single post",
+      "implementation": {
+        "processPostNow": {
+          "maxAttempts": 4,
+          "waitMsBetweenAttempts": 3500,
+          "totalMaxWaitTime": "~14 seconds"
+        },
+        "flow": [
+          "1. Call runAutoAnimeNow() to fetch & queue",
+          "2. Immediately call processPostNow() to upload",
+          "3. Inline retry loop (not waiting for cron)",
+          "4. Return status after final attempt"
+        ]
+      },
+      "responseFeedback": {
+        "success": "{ queued: true, status: 'posted', postedAt, instagramPermalink }",
+        "failed": "{ queued: true, status: 'failed', errorLog: 'detailed message' }",
+        "processingDetails": "instantProcess: { processed, status, attempts }"
+      },
+      "files": [
+        "backend/src/routes/auto-anime.routes.js",
+        "backend/src/services/scheduler.service.js"
+      ]
+    },
+
+    "dailyScheduler": {
+      "endpoint": "POST /api/auto-anime/activate-daily",
+      "setup": "Configure time slots (e.g., 09:00, 12:30, 18:00) in timezone",
+      "behavior": "Daily posts at user-specified times using cron tick",
+      "implementation": {
+        "timeSlots": "HH:mm format, validated regex",
+        "timezone": "User timezone (defaults to Asia/Kolkata)",
+        "lastRunTracking": "Map of 'dateKey:slot → lastRunTime'",
+        "prevention": "Won't double-post same content in same slot"
+      },
+      "activationFlow": [
+        "1. Click 'Start Daily Auto'",
+        "2. User selects content type (reel/post/both)",
+        "3. User sets time slots and timezone",
+        "4. API sets enabled=true and triggers immediate tick",
+        "5. Cron checks every minute if time matches",
+        "6. When match: fetch Reddit → queue → upload"
+      ],
+      "files": [
+        "backend/src/routes/auto-anime.routes.js",
+        "backend/src/services/anime-automation.service.js"
+      ]
+    },
+
+    "redditIntegration": {
+      "purpose": "Automated anime content sourcing",
+      "apiMethod": "User-Agent based Reddit API (no OAuth required)",
+      "endpoints": [
+        "https://www.reddit.com/r/{subreddit}/top.json",
+        "https://www.reddit.com/.json (fallback)"
+      ],
+      "supportedSubreddits": [
+        "Animeedits",
+        "AnimeMusicVideos",
+        "anime_edits",
+        "anime"
+      ],
+      "contentFilters": {
+        "minScore": "Upvote threshold (default 20)",
+        "minWidth": "Minimum video width (default 720px)",
+        "maxAgeHours": "Maximum post age (default 72 hours)",
+        "keywords": "Optional keyword matching"
+      },
+      "contentTypes": {
+        "reel": "Video content from reddit_video.fallback_url",
+        "post": "Image content from preview.redd.it"
+      },
+      "extraction": {
+        "videoUrl": "secure_media.reddit_video.fallback_url (preserves query params)",
+        "imageUrl": "preview.redd.it direct image (JPG/PNG preferred)",
+        "title": "Post title → caption template"
+      },
+      "files": [
+        "backend/src/services/anime-fetch.service.js"
+      ]
+    },
+
+    "instagramIntegration": {
+      "apiVersion": "Graph API v19.0",
+      "requirements": [
+        "Instagram Business Account",
+        "Access Token with publishing scope",
+        "User ID for business account"
+      ],
+      "publishingFlow": {
+        "step1": "Create media container (POST /ig_user/media)",
+        "step2": "Upload media to container (POST /ig_container/media)",
+        "step3": "Publish container (POST /ig_user/media_publish)",
+        "step4": "Retrieve post insights (GET /media/insights)"
+      },
+      "mediaTypes": {
+        "REEL": {
+          "requirements": [
+            "MP4 format",
+            "H.264 video codec",
+            "Duration 3-90 seconds",
+            "Width 1080px",
+            "Audio track mandatory"
+          ],
+          "publicUrl": "Required (Instagram downloads to process)"
+        },
+        "IMAGE": {
+          "requirements": [
+            "JPG/PNG format",
+            "1080x1080px or matching aspect",
+            "File size < 300MB"
+          ]
+        },
+        "CAROUSEL": "Multiple images/videos"
+      },
+      "processing": [
+        "Internally transcode with ffmpeg to Instagram specs",
+        "Mux audio if separate track needed",
+        "Upload to server /media directory",
+        "Generate public URL via PUBLIC_BASE_URL",
+        "Pass URL to Instagram Graph API"
+      ],
+      "errorHandling": [
+        "2207076: Media unreachable (PUBLIC_BASE_URL not public)",
+        "REEL_STILL_PROCESSING: Transaction not yet ready, retry",
+        "Only photo or video: Format mismatch, convert & retry"
+      ],
+      "publicUrlRequirement": "Instagram must download media from public HTTP(S) URL, not localhost or private network",
+      "files": [
+        "backend/src/services/instagram.service.js",
+        "backend/src/routes/post.routes.js"
+      ]
+    },
+
+    "mediaProcessing": {
+      "formats": {
+        "reel": {
+          "input": ["mp4", "webm", "avi", "mov"],
+          "output": "MP4 (H.264 video + AAC audio, Instagram spec)",
+          "transcoding": "Via ffmpeg spawned process",
+          "audioMuxing": "If separate audio track: merge video + audio"
+        },
+        "image": {
+          "input": ["jpg", "png", "webp", "gif"],
+          "output": "PNG or JPG (1080x1080 or aspect-correct)",
+          "processing": "Via sharp library for resizing/optimization"
+        }
+      },
+      "tempFileHandling": {
+        "creation": "Uploaded files stored in /uploads directory",
+        "deletion": "Automatically cleaned after successful posting",
+        "localMediaPath": "Path stored in Post document",
+        "isTemporaryMedia": "Flag indicating temp file lifecycle"
+      },
+      "ffmpegOperations": [
+        "Video transcoding (codec conversion)",
+        "Audio extraction (from video)",
+        "Audio muxing (combine video + audio)",
+        "Video probing (detect format/duration/tracks)",
+        "Frame extraction (thumbnail generation)"
+      ],
+      "files": [
+        "backend/src/services/media-extract.service.js",
+        "backend/src/services/music-handler.service.js",
+        "backend/src/routes/post.routes.js"
+      ]
+    },
+
+    "captionGeneration": {
+      "approach": "Deterministic template-based (no LLM required)",
+      "inputs": [
+        "Reddit post title (seed text)",
+        "Existing caption (optional override)",
+        "Post type (reel/post)"
+      ],
+      "features": {
+        "hooks": [
+          "POV-style openers",
+          "Engagement hooks",
+          "Anime-specific phrases"
+        ],
+        "callToActions": [
+          "Rate 1-10 in comments",
+          "Save and share",
+          "Follow for daily edits"
+        ],
+        "keywords": "Extracted from title, stop-words filtered",
+        "hashtags": "Type-specific base tags + dynamic tags from keywords"
+      },
+      "output": {
+        "caption": "Full caption text (< 2200 chars)",
+        "keywords": "Array of topic keywords",
+        "hashtags": "Array of hashtag strings"
+      },
+      "files": [
+        "backend/src/services/caption-suggest.service.js"
+      ]
+    },
+
+    "instagramInsights": {
+      "endpoint": "GET /api/auth/instagram-account-details",
+      "protectedRoute": true,
+      "data": {
+        "profileData": [
+          "Username",
+          "Bio/Biography",
+          "Follower count",
+          "Following count",
+          "Media count",
+          "Profile picture URL",
+          "Website link"
+        ],
+        "accountInsights": [
+          "Impressions",
+          "Reach",
+          "Profile views",
+          "Website clicks"
+        ],
+        "recentMedia": [
+          "Last 12 posts",
+          "Caption text",
+          "Media type (REEL/IMAGE/VIDEO)",
+          "Media URL",
+          "Like count",
+          "Comment count",
+          "Timestamp"
+        ],
+        "perMediaMetrics": [
+          "Impressions",
+          "Reach",
+          "Saved count",
+          "Total interactions",
+          "Video views (for reels)"
+        ]
+      },
+      "files": [
+        "backend/src/routes/auth.routes.js"
+      ]
+    },
+
+    "queueManagement": {
+      "dataModel": "Post collection with status + scheduledTime indexes",
+      "queueDisplay": ["Pending (waiting)", "Processing (uploading)", "Failed (error)"],
+      "userActions": [
+        "View post details and error messages",
+        "Cancel pending post (status → deleted)",
+        "Delete local media file",
+        "Retry failed post (status → pending)"
+      ],
+      "dataRefresh": "Poll every 10 seconds (configurable)",
+      "pagination": "Limit 20 items per view",
+      "files": [
+        "frontend/src/components/DashboardView.jsx (pending/history sections)",
+        "frontend/src/services/api.js"
+      ]
+    },
+
+    "themingSystem": {
+      "storage": "localStorage (persists across sessions)",
+      "themes": [
+        {
+          "name": "Aurora",
+          "preset": "Default cyan/teal accent"
+        },
+        {
+          "name": "Sunset",
+          "preset": "Orange/warm gradient"
+        },
+        {
+          "name": "Ocean",
+          "preset": "Deep teal/blue"
+        },
+        {
+          "name": "Cyber Ice",
+          "preset": "Electric cyan/neon"
+        },
+        {
+          "name": "Volt Purple",
+          "preset": "Purple/magenta"
+        },
+        {
+          "name": "Lava Pop",
+          "preset": "Orange/yellow fire"
+        },
+        {
+          "name": "Neon Forest",
+          "preset": "Green/cyan neon"
+        },
+        {
+          "name": "Midnight Mint",
+          "preset": "Deep blue/mint"
+        }
+      ],
+      "customization": "Full color override for each theme component",
+      "files": [
+        "frontend/src/components/DashboardView.jsx (theme logic)",
+        "frontend/src/styles.css (CSS variables)"
+      ]
+    }
+  },
+
+  "stateManagement": {
+    "architecture": "Local component state (useState)",
+    "noGlobalStateLibrary": "No Redux/Context API - kept simple for medium-complexity app",
+    "patterns": {
+      "dashboardView": "22+ useState hooks managing different UI sections",
+      "useAuthHook": "Custom hook with token/session validation",
+      "apiStatePattern": "Loading flags + data + error pattern"
+    },
+    "criticalStates": [
+      {
+        "name": "autoAnimeConfig",
+        "source": "GET /api/auto-anime",
+        "usage": "Anime automation settings (subreddits, filters, schedule)"
+      },
+      {
+        "name": "pendingPosts",
+        "source": "GET /api/posts?statuses=pending,processing",
+        "polling": "Every 10 seconds with dedup logic",
+        "comparison": "Deep equality check to prevent unnecessary re-renders"
+      },
+      {
+        "name": "history",
+        "source": "GET /api/posts?statuses=posted,failed",
+        "caching": "Sorted reverse-chronological"
+      },
+      {
+        "name": "authToken",
+        "storage": "sessionStorage (prefers) → localStorage",
+        "validation": "Every login, calls GET /auth/me"
+      },
+      {
+        "name": "instagramStatus",
+        "source": "GET /api/auth/instagram-token-status",
+        "purpose": "Display token validity to user"
+      },
+      {
+        "name": "theme",
+        "storage": "localStorage key 'instaflow_active_theme_v1'",
+        "default": "Aurora"
+      }
+    ],
+    "dataFlowDiagram": "User Input → API Call → Update State → Re-render → UI Update"
+  },
+
+  "dataFlow": {
+    "userLogin": {
+      "entry": "LoginView.onLogin(email, password)",
+      "api": "POST /api/auth/login",
+      "response": "{ token, user }",
+      "state": "Set token in sessionStorage",
+      "validation": "GET /api/auth/me (validates token)",
+      "on401": "Logout + redirect to LoginView",
+      "stateUpdate": "useAuth sets: token, user, isAuthenticated"
+    },
+
+    "manualPostCreation": {
+      "entry": "User fills Schedule tab form",
+      "inputs": [
+        "mediaUrl (or file upload)",
+        "caption",
+        "scheduledTime",
+        "postType (reel/post)"
+      ],
+      "api": "POST /api/posts",
+      "flow": [
+        "1. Validate media (download if URL)",
+        "2. Process media (transcode/resize)",
+        "3. Generate public URL for Instagram",
+        "4. Get caption text (auto-generate or manual)",
+        "5. Create Post document in MongoDB",
+        "6. Return post ID and metadata"
+      ],
+      "uiUpdate": "Add to pendingPosts array, switch to 'pending' tab"
+    },
+
+    "autoAnimeExecution": {
+      "trigger": "User clicks 'Run Now (Instant)'",
+      "api": "POST /api/auto-anime/run-now",
+      "backend": {
+        "1": "runAutoAnimeNow() fetches Reddit candidates",
+        "2": "Filter by config (subreddits, score, age, keywords)",
+        "3": "Select random (or latest) candidate",
+        "4": "Extract media (video URL from reddit_video or image)",
+        "5": "Generate caption from title + template",
+        "6": "Create Post document with scheduledTime=now",
+        "7": "Return postId"
+      },
+      "instantUpload": {
+        "processPostNow": {
+          "loop": "Up to 4 attempts",
+          "gap": "3.5 seconds between attempts",
+          "logic": "Lock post → call publishPost(post) → check status"
+        },
+        "finalStatus": "posted | failed | pending-processing"
+      },
+      "uiUpdate": "Show dynamic island notification with result"
+    },
+
+    "dailyScheduleActivation": {
+      "trigger": "User clicks 'Start Daily Auto'",
+      "api": "POST /api/auto-anime/activate-daily",
+      "backend": {
+        "1": "Set enabled=true in AutoAnimeConfig",
+        "2": "Set timeSlots and timezone from user input",
+        "3": "Trigger immediate processAutoAnimeSchedule()",
+        "4": "Trigger immediate processPendingPosts()",
+        "return": "{ activated: true, config }"
+      },
+      "ongoing": "Every minute, cron checks if current time matches any slot",
+      "execution": "Fetch Reddit → Create Post → Upload (via batch processor)"
+    },
+
+    "postProcessing": {
+      "trigger": "Cron tick (every minute) or instant call",
+      "find": "Posts with status=pending AND scheduledTime <= now",
+      "lock": "Update status to 'processing' (atomically)",
+      "upload": "Call publishPost() via Instagram Graph API",
+      "results": [
+        {
+          "status": "posted",
+          "updates": ["instagramPermalink", "postedAt", "errorLog=''"]
+        },
+        {
+          "status": "failed",
+          "reason": "Non-retryable error or maxRetries exceeded",
+          "updates": ["errorLog with message"]
+        },
+        {
+          "status": "pending",
+          "reason": "Retryable error, re-queue with delayed scheduledTime",
+          "updates": ["scheduledTime=now + RETRY_GAP_SECONDS"]
+        }
+      ],
+      "cleanupPhase": "Delete local media file if posted successfully"
+    },
+
+    "errorRecovery": {
+      "pattern": "isRetryableInstagramError() determines path",
+      "retryable": [
+        "Rate limiting (Instagram throttle)",
+        "Temporary network errors",
+        "Reel still processing (wait, retry)"
+      ],
+      "nonRetryable": [
+        "2207076 (public URL unreachable)",
+        "Invalid format",
+        "Only photo or video accepted (type mismatch)"
+      ],
+      "userVisibility": "errorLog stored in Post, displayed in UI"
+    }
+  },
+
+  "databaseSchema": {
+    "Post": {
+      "fields": {
+        "_id": "ObjectId (auto)",
+        "mediaUrl": "String - public URL of posted media",
+        "caption": "String (max 2200) - Instagram caption text",
+        "keywords": "[String] - SEO/discovery keywords",
+        "hashtags": "[String] - Instagram hashtags",
+        "driveFileId": "String (optional) - Google Drive ID if sourced",
+        "sourcePlatform": "Enum: [manual, reddit]",
+        "sourceId": "String - Reddit post ID or source identifier",
+        "sourceUrl": "String - Original source URL",
+        "localMediaPath": "String - Path to temp file during processing",
+        "isTemporaryMedia": "Boolean - Is file in /uploads?",
+        "localMediaDeletedAt": "Date - When temp file was cleaned up",
+        "postType": "Enum: [reel, post] - Content type",
+        "scheduledTime": "Date - When to publish (or null for immediate)",
+        "status": "Enum: [pending, processing, posted, failed]",
+        "attempts": "Number - Upload attempt count",
+        "postedAt": "Date - When successfully published",
+        "instagramCreationId": "String - Instagram container creation ID",
+        "instagramPublishId": "String - Instagram published media ID",
+        "instagramMediaType": "String - REEL | IMAGE | VIDEO",
+        "instagramMediaProductType": "String - CONTENT | AD",
+        "instagramPermalink": "String - Direct link to post",
+        "errorLog": "String - Error message if failed"
+      },
+      "indexes": [
+        "{ status: 1, scheduledTime: 1 }",
+        "{ sourcePlatform: 1, sourceId: 1 }",
+        "{ createdAt: -1 }"
+      ]
+    },
+
+    "AutoAnimeConfig": {
+      "singletonKey": "String (unique, 'default')",
+      "enabled": "Boolean - Is daily auto enabled?",
+      "sourcePlatform": "String - Currently 'reddit'",
+      "contentType": "Enum: [reel, post, both]",
+      "randomMode": "Boolean - Random vs latest selection",
+      "subreddits": "[String] - Source subreddits",
+      "keywords": "[String] - Optional keyword filters",
+      "minScore": "Number - Minimum upvote threshold",
+      "minWidth": "Number - Minimum video width (px)",
+      "maxAgeHours": "Number - Maximum post age",
+      "captionTemplate": "String - Caption template with {{title}} placeholder",
+      "hashtagSets": "[String] - Rotating hashtag pools",
+      "hashtagSetCursor": "Number - Current hashtag pool index",
+      "keywordSets": "[String] - Rotating keyword pools",
+      "keywordSetCursor": "Number - Current keyword pool index",
+      "timeSlots": "[String (HH:mm)] - Daily post times",
+      "timezone": "String - User timezone (Asia/Kolkata default)",
+      "lastRunBySlot": "Map<String, Date> - Last execution per slot"
+    }
+  },
+
+  "apiEndpoints": {
+    "authentication": {
+      "POST /api/auth/login": {
+        "body": { "email": "string", "password": "string" },
+        "response": { "token": "string (JWT)", "user": { "email": "string", "role": "admin" } }
+      },
+      "GET /api/auth/me": {
+        "auth": "Bearer token",
+        "response": { "user": { "sub": "email", "role": "admin" } }
+      },
+      "GET /api/auth/instagram-token-status": {
+        "auth": "Bearer token",
+        "response": { "valid": "boolean", "userId": "string", "username": "string" }
+      },
+      "GET /api/auth/instagram-account-details": {
+        "auth": "Bearer token",
+        "response": {
+          "profile": {
+            "username": "string",
+            "followers_count": "number",
+            "bio": "string",
+            "media_count": "number"
+          },
+          "insights": {
+            "impressions": "number",
+            "reach": "number",
+            "profile_views": "number"
+          },
+          "recentMedia": [{ "id": "string", "mediaType": "REEL|IMAGE", "caption": "string", "likeCount": "number" }]
+        }
+      }
+    },
+
+    "posts": {
+      "GET /api/posts": {
+        "query": { "statuses": "comma-separated [pending,processing,posted,failed]", "limit": "number" },
+        "auth": "Bearer token",
+        "response": "[{ Post object }]"
+      },
+      "POST /api/posts": {
+        "auth": "Bearer token",
+        "body": {
+          "mediaUrl": "string",
+          "postType": "reel|post",
+          "caption": "string",
+          "scheduledTime": "ISO date (null = immediate)",
+          "keywords": "[string]",
+          "hashtags": "[string]"
+        },
+        "response": { "_id": "string", "status": "pending", "scheduledTime": "date" }
+      },
+      "DELETE /api/posts/:id": {
+        "auth": "Bearer token",
+        "response": { "deleted": "boolean" }
+      }
+    },
+
+    "autoAnime": {
+      "GET /api/auto-anime": {
+        "auth": "Bearer token",
+        "response": "{ AutoAnimeConfig object }"
+      },
+      "PATCH /api/auto-anime": {
+        "auth": "Bearer token",
+        "body": "Partial AutoAnimeConfig update",
+        "response": "Updated full config"
+      },
+      "POST /api/auto-anime/run-now": {
+        "auth": "Bearer token",
+        "body": "Optional { contentType: 'reel|post|both' }",
+        "response": {
+          "queued": "boolean",
+          "postId": "string",
+          "status": "pending|posted|failed",
+          "instantProcess": { "processed": "boolean", "status": "string" },
+          "errorLog": "string (if failed)"
+        }
+      },
+      "POST /api/auto-anime/activate-daily": {
+        "auth": "Bearer token",
+        "body": "Optional { timeSlots, timezone, contentType, ... }",
+        "response": {
+          "activated": true,
+          "config": {
+            "enabled": "boolean",
+            "timeSlots": "string[]",
+            "timezone": "string"
+          }
+        }
+      },
+      "POST /api/auto-anime/tick": {
+        "auth": "Bearer token",
+        "response": {
+          "triggered": "boolean",
+          "auto": {
+            "triggered": "boolean",
+            "reason": "string"
+          }
+        }
+      }
+    },
+
+    "uploads": {
+      "POST /api/uploads": {
+        "auth": "Bearer token",
+        "content-type": "multipart/form-data",
+        "fields": { "file": "binary", "postType": "reel|post" },
+        "response": { "success": "boolean", "fileUrl": "string", "fileName": "string" }
+      }
+    },
+
+    "music": {
+      "GET /api/music": {
+        "auth": "Bearer token",
+        "response": "[{ id: 'string', name: 'string', url: 'string' }]"
+      }
+    }
+  },
+
+  "deploymentArchitecture": {
+    "backend": {
+      "platform": "Render",
+      "region": "Oregon",
+      "tier": "Free (auto-sleep after 15 min inactivity)",
+      "healthCheck": "GET /health returns { status: 'ok', uptime: 'number' }",
+      "mediaServing": "Express static middleware /media (uploads directory)",
+      "environment": ".env file with all secrets",
+      "startCommand": "node src/server.js",
+      "devCommand": "nodemon src/server.js"
+    },
+    "frontend": {
+      "platform": "Vercel",
+      "buildCommand": "vite build",
+      "outputDirectory": "dist/",
+      "environmentVariable": "VITE_API_URL (injected at build)",
+      "redirects": "All routes → index.html (SPA)",
+      "cache": "Static assets cached, index.html no-cache"
+    },
+    "database": {
+      "platform": "MongoDB Atlas",
+      "connection": "MONGODB_URI environment variable",
+      "authentication": "Connection string with credentials"
+    },
+    "docker": {
+      "root": "docker-compose.yml",
+      "services": [
+        "backend (port 5000, Node.js)",
+        "frontend (port 3000, build artifact serving)"
+      ]
+    }
+  },
+
+  "missingAndIncompleteFeatures": [
+    {
+      "feature": "Google Drive Integration",
+      "status": "Partially implemented",
+      "details": "Files uploaded but Drive sync incomplete. Routes exist but limited functionality.",
+      "file": "backend/src/services/google-drive.service.js"
+    },
+    {
+      "feature": "Google Sheets Logging",
+      "status": "Infrastructure in place",
+      "details": "Can write post metrics to sheets, but not wired to UI",
+      "improvement": "Add opt-in analytics export option"
+    },
+    {
+      "feature": "Advanced Analytics",
+      "status": "Basic implementation only",
+      "details": "Shows recent media metrics, missing trending analysis, optimal post times",
+      "improvement": "Add algorithmic suggestions for best posting times"
+    },
+    {
+      "feature": "Multi-select Hashtag/Keyword Sets",
+      "status": "Configured only",
+      "details": "UI doesn't allow user to customize rotating sets",
+      "improvement": "Add admin panel for hashtag pool management"
+    },
+    {
+      "feature": "Media Library Management",
+      "status": "File system only",
+      "details": "Music and uploads stored locally, no UI for browsing/organizing",
+      "improvement": "Add file browser UI with tagging"
+    },
+    {
+      "feature": "Rich Text Captions",
+      "status": "Plain text only",
+      "details": "No emoji support, no mention formatting",
+      "improvement": "Add emoji picker and mention autocomplete"
+    },
+    {
+      "feature": "Batch Editing",
+      "status": "Not implemented",
+      "details": "Can't edit multiple queued posts at once",
+      "improvement": "Add multi-select + bulk caption/time updates"
+    },
+    {
+      "feature": "Content Calendar",
+      "status": "Not implemented",
+      "details": "No visual calendar view of scheduled posts",
+      "improvement": "Add calendar grid showing posts by date"
+    },
+    {
+      "feature": "Reels Recommendations",
+      "status": "Not implemented",
+      "details": "No AI suggestions for trending audio/captions",
+      "improvement": "Integrate trending audio API + caption suggestions"
+    },
+    {
+      "feature": "Instagram Captions Parsing",
+      "status": "Basic extraction only",
+      "details": "Extracts full caption but doesn't parse mentions/hashtags separately",
+      "improvement": "Extract mentions and suggested hashtags intelligently"
+    }
+  ],
+
+  "performanceAndUXIssues": [
+    {
+      "issue": "Render Free Tier Cold Start",
+      "severity": "medium",
+      "description": "Backend spins down after 15 min inactivity, first request takes 20-40 seconds",
+      "solution": "Upgrade to Render paid tier or use Uptime Robot pings to keep warm"
+    },
+    {
+      "issue": "Large Reel Processing Times",
+      "severity": "medium",
+      "description": "Video transcoding via ffmpeg can take 30-180 seconds depending on file size",
+      "solution": "Show detailed progress UI, or implement background job queue (Bull/BullMQ)"
+    },
+    {
+      "issue": "No Websocket Updates",
+      "severity": "medium",
+      "description": "Queue and history refresh via polling every 10s, can feel stale",
+      "solution": "Implement Socket.io for real-time push updates"
+    },
+    {
+      "issue": "Polling Inefficiency",
+      "severity": "low",
+      "description": "Dashboard polls every 10s even if no activity, wastes bandwidth",
+      "solution": "Reduce poll interval to 30s or implement debouncing with activity detection"
+    },
+    {
+      "issue": "Public Base URL Requirement",
+      "severity": "high",
+      "description": "Instagram Graph API requires public URL to download media, local development problematic",
+      "solution": "Use ngrok/cloudflare tunnel, or build local proxy endpoint"
+    },
+    {
+      "issue": "Large File Upload Limits",
+      "severity": "low",
+      "description": "300MB file size limit may reject some media, Instagram actual limit is stricter",
+      "solution": "Enforce tighter validation (max 100MB), provide clear feedback"
+    },
+    {
+      "issue": "No Search/Filter in History",
+      "severity": "low",
+      "description": "History tab shows all posts, hard to find specific post",
+      "solution": "Add search by caption, date range filter, status filter"
+    },
+    {
+      "issue": "Mobile UX for Media Upload",
+      "severity": "medium",
+      "description": "File picker on mobile can be clunky, no camera shortcut",
+      "solution": "Use <input accept='image/*, video/*'> to open camera on mobile"
+    },
+    {
+      "issue": "Error Messages Truncation",
+      "severity": "low",
+      "description": "Long error logs truncated to 500 chars in UI",
+      "solution": "Implement expandable error details modal"
+    },
+    {
+      "issue": "Theme Color Inconsistency on Dark Mode",
+      "severity": "low",
+      "description": "Theme system is light-mode only, no dark mode variant",
+      "solution": "Add dark theme preset + prefers-color-scheme detection"
+    }
+  ],
+
+  "codeQualityObservations": [
+    {
+      "category": "Strengths",
+      "items": [
+        "Clean separation of concerns (services, routes, models)",
+        "Comprehensive error handling with descriptive messages",
+        "Transactional safety via MongoDB atomic updates",
+        "Environment-based configuration with validation",
+        "CORS properly configured for cross-origin requests",
+        "Retry logic prevents transient failures",
+        "Status enums prevent invalid state transitions"
+      ]
+    },
+    {
+      "category": "Improvements Needed",
+      "items": [
+        "No request validation library (should use joi/yup)",
+        "Error handling inconsistent (some caught, some not tested)",
+        "No logging framework (console.log only)",
+        "No API rate limiting implemented",
+        "No caching strategy (every request hits DB)",
+        "Database queries not optimized (no lean() in some places)",
+        "No automated tests (unit, integration, or e2e)",
+        "SessionStorage/LocalStorage logic could be simpler"
+      ]
+    },
+    {
+      "category": "Performance Optimizations Possible",
+      "items": [
+        "Cache AutoAnimeConfig in memory with TTL",
+        "Batch indexing for Post queries (status, scheduledTime)",
+        "Implement request deduplication in API calls",
+        "Lazy load DashboardView tabs (split bundle)",
+        "Virtualize long lists (if history grows large)",
+        "Debounce config saves in anime automation tab"
+      ]
+    }
+  ],
+
+  "securityConsiderations": [
+    {
+      "aspect": "Authentication",
+      "status": "Basic (email/password)",
+      "notes": "Suitable for single admin user, not multi-tenant",
+      "improvements": [
+        "Add rate limiting on /auth/login",
+        "Implement CSRF protection",
+        "Add 2FA support"
+      ]
+    },
+    {
+      "aspect": "Authorization",
+      "status": "Simple role-based (admin only)",
+      "notes": "All authenticated users get full access",
+      "improvements": [
+        "Add granular permissions (e.g., read-only users)",
+        "Implement audit logging for sensitive actions"
+      ]
+    },
+    {
+      "aspect": "Secrets Management",
+      "status": "Environment variables",
+      "notes": "Acceptable for small app, .env file should never be committed",
+      "improvements": [
+        "Use 1Password/Vault for prod secrets rotation",
+        "Add secrets scanning in CI/CD",
+        "Rotate Instagram access token periodically"
+      ]
+    },
+    {
+      "aspect": "HTTPS/TLS",
+      "status": "Required in prod (Vercel/Render enforce)",
+      "notes": "Good, all external APIs use HTTPS"
+    },
+    {
+      "aspect": "Data Privacy",
+      "status": "No user PII collected beyond admin email",
+      "notes": "GDPR-friendly, no email campaigns to users"
+    },
+    {
+      "aspect": "Media Upload Validation",
+      "status": "File type + size checked",
+      "notes": "Should add virus scanning for production",
+      "improvements": [
+        "Scan uploads with VirusTotal API",
+        "Validate MIME types strictly"
+      ]
+    }
+  ],
+
+  "fileStructureMap": {
+    "backend": {
+      "config/": {
+        "db.js": "MongoDB connection and initialization",
+        "env.js": "Environment variable loading and validation"
+      },
+      "middleware/": {
+        "auth.js": "JWT verification middleware"
+      },
+      "models/": {
+        "Post.js": "Post document schema with validation",
+        "AutoAnimeConfig.js": "Anime automation configuration schema"
+      },
+      "routes/": {
+        "auth.routes.js": "Authentication endpoints (login, token status, account details)",
+        "post.routes.js": "Post CRUD endpoints (create, list, delete, upload)",
+        "auto-anime.routes.js": "Automation endpoints (config, run-now, daily activation, manual tick)",
+        "upload.routes.js": "File upload handler",
+        "music.routes.js": "Music library endpoints",
+        "drive.routes.js": "Google Drive integration (partial)"
+      },
+      "services/": {
+        "anime-automation.service.js": "Reddit fetching, candidate filtering, post creation",
+        "anime-fetch.service.js": "Reddit API interaction, content extraction",
+        "scheduler.service.js": "Post upload orchestration, retry logic, state management",
+        "instagram.service.js": "Instagram Graph API publishing, media handling",
+        "media-extract.service.js": "URL fetching, media type detection, format conversion",
+        "caption-suggest.service.js": "Template-based caption generation",
+        "music-handler.service.js": "Audio extraction, music library management",
+        "media-cleanup.service.js": "Temporary file deletion",
+        "google-drive.service.js": "Google Drive API integration (partial)"
+      },
+      "scheduler/": {
+        "cron.js": "Cron job setup (every minute tick)"
+      },
+      "server.js": "Express app bootstrap and error handling",
+      "app.js": "Express middleware setup, route mounting, error handlers"
+    },
+    "frontend": {
+      "components/": {
+        "DashboardView.jsx": "Main tab-based dashboard (22 tabs, 200+ lines)",
+        "LoginView.jsx": "Email/password login form",
+        "Sidebar.jsx": "Navigation sidebar with tab switching"
+      },
+      "hooks/": {
+        "useAuth.js": "Session validation, login, logout, token management"
+      },
+      "services/": {
+        "api.js": "Axios instance with auth interceptor, API base URL resolution"
+      },
+      "App.jsx": "App routing (login vs dashboard), lazy loading",
+      "main.jsx": "React DOM mount point",
+      "styles.css": "Global Tailwind + CSS variables for theming"
+    },
+    "root": {
+      "docker-compose.yml": "Container orchestration (backend + frontend)",
+      "Dockerfile": "Frontend build container",
+      "package.json": "Root workspace scripts (dev, build, etc.)",
+      ".env": "Secrets (never commit to git!)"
+    }
+  },
+
+  "recommendedNextSteps": [
+    {
+      "priority": "high",
+      "task": "Add automated tests",
+      "details": "Unit tests for services, integration tests for APIs, E2E for critical flows",
+      "timeEstimate": "2-3 weeks"
+    },
+    {
+      "priority": "high",
+      "task": "Implement logging and monitoring",
+      "details": "Add winston/pino for structured logs, integrate Sentry/DataDog for error tracking",
+      "timeEstimate": "1 week"
+    },
+    {
+      "priority": "medium",
+      "task": "Add request validation",
+      "details": "Use joi/yup for input validation on all API endpoints",
+      "timeEstimate": "1 week"
+    },
+    {
+      "priority": "medium",
+      "task": "Implement rate limiting",
+      "details": "Use express-rate-limit to prevent abuse on auth/posting endpoints",
+      "timeEstimate": "3 days"
+    },
+    {
+      "priority": "medium",
+      "task": "Optimize database queries",
+      "details": "Add .lean() where appropriate, index optimization, query analysis",
+      "timeEstimate": "5 days"
+    },
+    {
+      "priority": "low",
+      "task": "Add real-time updates with Socket.io",
+      "details": "Replace polling with WebSocket for queue/history updates",
+      "timeEstimate": "2 weeks"
+    },
+    {
+      "priority": "low",
+      "task": "Implement background job queue",
+      "details": "Move video transcoding to async queue (Bull/BullMQ) for faster API responses",
+      "timeEstimate": "2 weeks"
+    },
+    {
+      "priority": "low",
+      "task": "Build content calendar UI",
+      "details": "Add calendar component showing scheduled posts by date",
+      "timeEstimate": "1 week"
+    }
+  ],
+
+  "summaryStatistics": {
+    "codeMetrics": {
+      "backendServices": 9,
+      "apiRoutes": 6,
+      "frontendComponents": 3,
+      "dashboardTabs": 7,
+      "databaseCollections": 2,
+      "apiEndpoints": "20+",
+      "lines_of_code_estimate": "~8000 (backend ~4500, frontend ~3500)"
+    },
+    "features": {
+      "postCreationMethods": 4,
+      "contentSources": ["Manual upload", "URL import", "Reddit auto-fetch", "Instagram extraction"],
+      "schedulingModes": ["Instant (Run Now)", "Scheduled time", "Daily recurrence"],
+      "mediaTypes": ["REEL (video/audio)", "IMAGE (photo)", "CAROUSEL (planned)"],
+      "uiThemes": 8,
+      "languages": ["JavaScript (backend)", "JavaScript/JSX (frontend)"]
+    },
+    "integrations": {
+      "externalApis": ["Instagram Graph API", "Reddit API", "Facebook Graph API"],
+      "mediaServices": ["0x0.st", "catbox.moe"],
+      "databases": ["MongoDB"],
+      "platforms": ["Render", "Vercel", "MongoDB Atlas"]
+    }
+  }
+}

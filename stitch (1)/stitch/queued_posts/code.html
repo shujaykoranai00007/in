@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Instaflow - Queued Posts</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container-low": "#eff1f2",
+              "surface-dim": "#d1d5d7",
+              "tertiary-dim": "#a40008",
+              "primary-fixed-dim": "#f15cab",
+              "on-tertiary": "#ffefed",
+              "on-secondary-container": "#6a1d9b",
+              "surface-container": "#e6e8ea",
+              "surface-container-highest": "#dadddf",
+              "on-tertiary-container": "#690003",
+              "on-error": "#ffefef",
+              "on-background": "#2c2f30",
+              "primary-container": "#ff6bb8",
+              "secondary-fixed": "#eac4ff",
+              "tertiary-fixed-dim": "#ff7b6c",
+              "on-tertiary-fixed-variant": "#7a0004",
+              "on-error-container": "#510017",
+              "error": "#b41340",
+              "inverse-primary": "#f45fae",
+              "surface-container-lowest": "#ffffff",
+              "on-surface-variant": "#595c5d",
+              "error-container": "#f74b6d",
+              "on-secondary-fixed": "#530081",
+              "primary-fixed": "#ff6bb8",
+              "outline-variant": "#abadae",
+              "secondary-container": "#eac4ff",
+              "secondary-fixed-dim": "#e2b1ff",
+              "on-primary-container": "#4a002e",
+              "on-primary": "#ffeff3",
+              "tertiary-fixed": "#ff9285",
+              "secondary": "#8037b1",
+              "surface-bright": "#f5f6f7",
+              "inverse-surface": "#0c0f10",
+              "primary-dim": "#990b64",
+              "surface-variant": "#dadddf",
+              "outline": "#757778",
+              "inverse-on-surface": "#9b9d9e",
+              "tertiary": "#bb000a",
+              "on-primary-fixed-variant": "#5b0039",
+              "surface": "#f5f6f7",
+              "tertiary-container": "#ff9285",
+              "on-secondary": "#fdeeff",
+              "surface-tint": "#a91f71",
+              "on-tertiary-fixed": "#3a0001",
+              "on-secondary-fixed-variant": "#742aa5",
+              "background": "#f5f6f7",
+              "secondary-dim": "#7329a4",
+              "surface-container-high": "#e0e3e4",
+              "error-dim": "#a70138",
+              "primary": "#a91f71",
+              "on-primary-fixed": "#000000",
+              "on-surface": "#2c2f30"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #f5f6f7; }
+        .font-headline { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body class="text-on-surface antialiased">
+<!-- SideNavBar -->
+<aside class="h-screen w-64 fixed left-0 top-0 z-40 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-[4px_0px_20px_rgba(169,31,113,0.04)] flex flex-col p-6 gap-2">
+<div class="mb-8 px-4">
+<div class="text-2xl font-black bg-gradient-to-br from-fuchsia-600 to-pink-500 bg-clip-text text-transparent font-headline">Instaflow</div>
+<div class="text-[10px] font-bold tracking-widest text-on-surface-variant uppercase mt-1">Premium Scheduler</div>
+</div>
+<nav class="space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-fuchsia-600 dark:hover:text-fuchsia-300 transition-colors hover:bg-white/50 dark:hover:bg-slate-800/50 hover:scale-[1.02] transition-transform duration-300 font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                Control
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-fuchsia-600 dark:hover:text-fuchsia-300 transition-colors hover:bg-white/50 dark:hover:bg-slate-800/50 hover:scale-[1.02] transition-transform duration-300 font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold" href="#">
+<span class="material-symbols-outlined">calendar_month</span>
+                Schedule
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-fuchsia-600 dark:hover:text-fuchsia-300 transition-colors hover:bg-white/50 dark:hover:bg-slate-800/50 hover:scale-[1.02] transition-transform duration-300 font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold" href="#">
+<span class="material-symbols-outlined">sensors</span>
+                Live Monitor
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-fuchsia-600 dark:hover:text-fuchsia-300 transition-colors hover:bg-white/50 dark:hover:bg-slate-800/50 hover:scale-[1.02] transition-transform duration-300 font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold" href="#">
+<span class="material-symbols-outlined">analytics</span>
+                Insights
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-fuchsia-600 dark:hover:text-fuchsia-300 transition-colors hover:bg-white/50 dark:hover:bg-slate-800/50 hover:scale-[1.02] transition-transform duration-300 font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold" href="#">
+<span class="material-symbols-outlined">auto_awesome</span>
+                Anime Auto
+            </a>
+<!-- Active Tab: Queued Posts -->
+<a class="flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-800 text-fuchsia-700 dark:text-fuchsia-300 rounded-xl shadow-sm scale-[1.02] transition-all font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-bold" href="#">
+<span class="material-symbols-outlined">layers</span>
+                Queued Posts
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 hover:text-fuchsia-600 dark:hover:text-fuchsia-300 transition-colors hover:bg-white/50 dark:hover:bg-slate-800/50 hover:scale-[1.02] transition-transform duration-300 font-['Plus_Jakarta_Sans'] tracking-tight text-sm font-semibold" href="#">
+<span class="material-symbols-outlined">history</span>
+                History
+            </a>
+</nav>
+<div class="mt-auto">
+<button class="w-full py-4 bg-gradient-to-br from-primary to-primary-container text-white rounded-xl font-headline font-bold text-sm shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all cubic-bezier(0.34,1.56,0.64,1)">
+                New Post
+            </button>
+</div>
+</aside>
+<!-- TopAppBar -->
+<header class="fixed top-0 right-0 left-64 h-20 z-30 bg-white/70 dark:bg-slate-950/70 backdrop-blur-2xl flex justify-between items-center px-12">
+<div class="flex items-center gap-8 w-1/2">
+<div class="relative w-full max-w-md">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input aria-label="form field" title="form-field" class="w-full pl-12 pr-4 py-2.5 bg-surface-container-high border-none rounded-xl focus:ring-2 focus:ring-primary/20 text-sm" placeholder="Search posts..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<button class="material-symbols-outlined text-on-surface-variant hover:scale-105 transition-transform">dark_mode</button>
+<button class="material-symbols-outlined text-on-surface-variant hover:scale-105 transition-transform">notifications</button>
+<div class="h-8 w-[1px] bg-outline-variant/20 mx-2"></div>
+<div class="flex items-center gap-3 cursor-pointer group">
+<div class="text-right">
+<p class="text-xs font-bold font-headline leading-none">Alex Rivera</p>
+<p class="text-[10px] text-on-surface-variant">Pro Curator</p>
+</div>
+<img class="w-10 h-10 rounded-full object-cover group-hover:ring-2 ring-primary/30 transition-all" alt="close up portrait of a young man with a slight smile in soft studio lighting with a neutral background" title="close up portrait of a young man with a slight smile in soft studio lighting with a neutral background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDXjPu7AJl2qGIn0Ur00t0CQAMWFGVy4UxNnNvyZLpoepoZOgWfzvbVQP-E6ecfdPw5mRsPQdmGFGoTaDrEIzY3SE8BpS6UFR2Wd1tYHQu058cnA9x_YdMYfiUOBe2MF5zVY5KYn_9s9RpCzzrY02ncCdQiDRjudF5TN9UywqDe9VoyITSwaa1yBu6zdWrwKA9Y8r7krH8HWIxL4cDUXu_SICpkTM0D4DmPtzKvxG-0QnkKRLh6jyVpqxAWWLMFDD-JbqQctch8gwMp"/>
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="ml-64 pt-28 px-12 pb-12 min-h-screen">
+<div class="max-w-6xl mx-auto">
+<!-- Header Section -->
+<div class="mb-10 flex justify-between items-end">
+<div>
+<h1 class="text-4xl font-extrabold font-headline tracking-tight text-on-surface mb-2">Queued Posts</h1>
+<p class="text-on-surface-variant max-w-md">Manage your upcoming content pipeline. Track processing statuses and fine-tune your release schedule.</p>
+</div>
+<div class="flex gap-3">
+<button class="px-5 py-2.5 bg-surface-container-lowest text-on-surface-variant font-headline font-bold text-sm rounded-xl shadow-sm hover:bg-surface-container-low transition-colors">
+                        Filters
+                    </button>
+<button class="px-5 py-2.5 bg-surface-container-lowest text-on-surface-variant font-headline font-bold text-sm rounded-xl shadow-sm hover:bg-surface-container-low transition-colors">
+                        Export List
+                    </button>
+</div>
+</div>
+<!-- Bento Stats Grid (Editorial Softness) -->
+<div class="grid grid-cols-4 gap-6 mb-10">
+<div class="col-span-1 bg-surface-container-lowest p-6 rounded-xl shadow-[0px_4px_20px_rgba(169,31,113,0.02)] border border-outline-variant/10">
+<p class="text-[10px] font-bold tracking-widest text-on-surface-variant uppercase mb-4">Total Queued</p>
+<div class="flex items-baseline gap-2">
+<span class="text-3xl font-black font-headline text-on-surface">24</span>
+<span class="text-xs font-bold text-primary">+3 today</span>
+</div>
+</div>
+<div class="col-span-1 bg-surface-container-lowest p-6 rounded-xl shadow-[0px_4px_20px_rgba(169,31,113,0.02)] border border-outline-variant/10">
+<p class="text-[10px] font-bold tracking-widest text-on-surface-variant uppercase mb-4">Processing</p>
+<div class="flex items-baseline gap-2">
+<span class="text-3xl font-black font-headline text-on-surface">2</span>
+<span class="material-symbols-outlined text-primary text-sm animate-pulse">sync</span>
+</div>
+</div>
+<div class="col-span-2 bg-gradient-to-br from-fuchsia-50 to-pink-50 dark:from-slate-800 dark:to-slate-900 p-6 rounded-xl border border-primary/5">
+<p class="text-[10px] font-bold tracking-widest text-primary uppercase mb-4">Next Release</p>
+<div class="flex justify-between items-center">
+<div>
+<span class="text-xl font-bold font-headline text-on-surface">Summer Minimalist Series</span>
+<p class="text-xs text-on-surface-variant mt-1">In 2 hours, 14 minutes</p>
+</div>
+<span class="material-symbols-outlined text-primary-container text-4xl">shutter_speed</span>
+</div>
+</div>
+</div>
+<!-- Table Container -->
+<div class="bg-surface-container-lowest rounded-2xl shadow-[0px_12px_40px_rgba(0,0,0,0.03)] overflow-hidden">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low/50">
+<th class="px-8 py-5 text-[10px] font-bold tracking-widest text-on-surface-variant uppercase">Media Preview</th>
+<th class="px-8 py-5 text-[10px] font-bold tracking-widest text-on-surface-variant uppercase">Caption Details</th>
+<th class="px-8 py-5 text-[10px] font-bold tracking-widest text-on-surface-variant uppercase">Status</th>
+<th class="px-8 py-5 text-[10px] font-bold tracking-widest text-on-surface-variant uppercase">Scheduled Time</th>
+<th class="px-8 py-5 text-[10px] font-bold tracking-widest text-on-surface-variant uppercase text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-surface-container">
+<!-- Row 1 -->
+<tr class="group hover:bg-surface-container-low/30 transition-colors cursor-default">
+<td class="px-8 py-6">
+<div class="w-16 h-16 rounded-lg overflow-hidden shadow-sm">
+<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="dramatic close up of a single monstera leaf with deep shadows and moody lighting" title="dramatic close up of a single monstera leaf with deep shadows and moody lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB_bVE0PPKr-DUgcjK9jgYl2JWZCVe0FoFdvqosyewn8V0Q8ryJoD_jcpSUrj-IpNJQhOJp4v7MpjMu8ijng4ZWcyiiGpxDvlP-ZO0Lf1Ho6LW6a8Fz4Q_hXUaoBuyljVyJBsJlezNtEC7PCbXGPiZrK-5xDYqXzUMC4id8ZpWjm33MhPOumF-6cXHAqJRIcnOAywy0E56gmEdrab5gC4mCnYef40lcHSuC4IPUpd4U6EZlRzoB-ws2G_K9IGKeebha5FNYKbE2w4yC"/>
+</div>
+</td>
+<td class="px-8 py-6 max-w-xs">
+<p class="text-sm font-semibold text-on-surface line-clamp-1">Golden hour in the botanical garden...</p>
+<p class="text-xs text-on-surface-variant mt-1">#minimalism #nature #photography</p>
+</td>
+<td class="px-8 py-6">
+<span class="px-3 py-1 rounded-full text-[10px] font-bold bg-secondary-container text-on-secondary-container">PENDING</span>
+</td>
+<td class="px-8 py-6">
+<p class="text-sm font-headline font-bold text-on-surface">Today, 04:30 PM</p>
+<p class="text-[10px] text-on-surface-variant">EST Timezone</p>
+</td>
+<td class="px-8 py-6 text-right">
+<div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-2 hover:bg-surface-container-high rounded-lg text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">refresh</span>
+</button>
+<button class="p-2 hover:bg-error-container/20 rounded-lg text-on-surface-variant hover:text-error transition-colors">
+<span class="material-symbols-outlined text-lg">delete</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="group hover:bg-surface-container-low/30 transition-colors cursor-default">
+<td class="px-8 py-6">
+<div class="w-16 h-16 rounded-lg overflow-hidden shadow-sm relative">
+<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="serene alpine lake reflecting snow capped mountains under a soft blue sky" title="serene alpine lake reflecting snow capped mountains under a soft blue sky" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBxRXqZxM0_ZSffrdXgW3eA6Ln1n7L9R7gNH2tkxDPfGR5tlS2-jt6p2QYQcczjVrKxJvJpSbMLnnt6HPewh9OqP9tjxw4BHoLSxpg7yCCdGxALJR092sgQAz7rNdiQPsLbZSKBSrVKY5G1_026wsFSa_GqqwNaarMC6gUG1lxb4GnkW9x96ES--TJAs2PillNcutE1bKX6Fay7cbRkU75ePeqO5EGi-UKE2k__A0EHNpFlElckcSwc-xbQ4L9qUPo2PPKQEM-wskWG"/>
+<div class="absolute inset-0 bg-black/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-sm animate-spin">sync</span>
+</div>
+</div>
+</td>
+<td class="px-8 py-6 max-w-xs">
+<p class="text-sm font-semibold text-on-surface line-clamp-1">Reflections of peace at the summit.</p>
+<p class="text-xs text-on-surface-variant mt-1">#hiking #outdoors #adventure</p>
+</td>
+<td class="px-8 py-6">
+<span class="px-3 py-1 rounded-full text-[10px] font-bold bg-primary-container/20 text-primary-dim">PROCESSING</span>
+</td>
+<td class="px-8 py-6">
+<p class="text-sm font-headline font-bold text-on-surface">Today, 08:00 PM</p>
+<p class="text-[10px] text-on-surface-variant">EST Timezone</p>
+</td>
+<td class="px-8 py-6 text-right">
+<div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-2 hover:bg-surface-container-high rounded-lg text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">refresh</span>
+</button>
+<button class="p-2 hover:bg-error-container/20 rounded-lg text-on-surface-variant hover:text-error transition-colors">
+<span class="material-symbols-outlined text-lg">delete</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="group hover:bg-surface-container-low/30 transition-colors cursor-default">
+<td class="px-8 py-6">
+<div class="w-16 h-16 rounded-lg overflow-hidden shadow-sm">
+<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="overhead view of a marble coffee table with a latte, an open magazine, and a small flower vase" title="overhead view of a marble coffee table with a latte, an open magazine, and a small flower vase" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBuEV4KEvdaiBoZPPDG-r-j0E-v--hB1P2U6Vj6cNCnofDcR1x6KsjmWpkC-SbFJ0HERTBOu8LtGlcwXCWnkjpiz5UM1jrjmrSBGcePe2UXzN6maS-TXaO94zZwHixIyLCiKqdFIDRo_AkVcmzq3CKIedy2w67reibuPBbpIgJnnBKVKJKvRPiHSuSpdxt32uX-9A9NAzfI-C5kW-G5KBl3kCP4kQ-3LXlL4FBl1Dp3ShEaw13zVKIS44z-GdEgq-z6S3gn4h4m3hWw"/>
+</div>
+</td>
+<td class="px-8 py-6 max-w-xs">
+<p class="text-sm font-semibold text-on-surface line-clamp-1">Saturday morning rituals are my favorite...</p>
+<p class="text-xs text-on-surface-variant mt-1">#lifestyle #coffee #morning</p>
+</td>
+<td class="px-8 py-6">
+<span class="px-3 py-1 rounded-full text-[10px] font-bold bg-secondary-container text-on-secondary-container">PENDING</span>
+</td>
+<td class="px-8 py-6">
+<p class="text-sm font-headline font-bold text-on-surface">Tomorrow, 09:00 AM</p>
+<p class="text-[10px] text-on-surface-variant">EST Timezone</p>
+</td>
+<td class="px-8 py-6 text-right">
+<div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-2 hover:bg-surface-container-high rounded-lg text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">refresh</span>
+</button>
+<button class="p-2 hover:bg-error-container/20 rounded-lg text-on-surface-variant hover:text-error transition-colors">
+<span class="material-symbols-outlined text-lg">delete</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="group hover:bg-surface-container-low/30 transition-colors cursor-default">
+<td class="px-8 py-6">
+<div class="w-16 h-16 rounded-lg overflow-hidden shadow-sm">
+<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="architectural shot of a luxury villa with infinity pool at dusk with warm glowing lights" title="architectural shot of a luxury villa with infinity pool at dusk with warm glowing lights" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCVZQ7462r4hMZXAYcCUNChd_fz5XXlDRQMO5FEGT3_8WeCTLyuVo8is2D-vN3eveoDbvJUVxRlkJbRNs4tRk1jXcbks6__oRFTEgFLYAqchcYAIhsasdx8289iSEvsfII-9H9vdzWI6pNNP5rZXlDckWK9z1lt7SupY3uMOc3vyFhtvuGTfSlzqOeBIXvgUGIqIZ07G8d1CFCLmAz5IlTNCBO1YNafiRMh1yMDc01Jl3AjbxsMBLEGRRWD7IA2ej7oHtz_tDMQrWiy"/>
+</div>
+</td>
+<td class="px-8 py-6 max-w-xs">
+<p class="text-sm font-semibold text-on-surface line-clamp-1">Dream architecture in the heart of Cali.</p>
+<p class="text-xs text-on-surface-variant mt-1">#architecture #design #luxury</p>
+</td>
+<td class="px-8 py-6">
+<span class="px-3 py-1 rounded-full text-[10px] font-bold bg-secondary-container text-on-secondary-container">PENDING</span>
+</td>
+<td class="px-8 py-6">
+<p class="text-sm font-headline font-bold text-on-surface">Tomorrow, 06:15 PM</p>
+<p class="text-[10px] text-on-surface-variant">EST Timezone</p>
+</td>
+<td class="px-8 py-6 text-right">
+<div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-2 hover:bg-surface-container-high rounded-lg text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">refresh</span>
+</button>
+<button class="p-2 hover:bg-error-container/20 rounded-lg text-on-surface-variant hover:text-error transition-colors">
+<span class="material-symbols-outlined text-lg">delete</span>
+</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+<!-- Pagination/Footer -->
+<div class="px-8 py-5 bg-surface-container-low/20 flex items-center justify-between border-t border-surface-container">
+<p class="text-xs text-on-surface-variant">Showing <span class="font-bold text-on-surface">1-4</span> of <span class="font-bold text-on-surface">24</span> scheduled posts</p>
+<div class="flex gap-2">
+<button class="w-10 h-10 flex items-center justify-center rounded-xl border border-outline-variant/20 hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-sm">chevron_left</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-xl bg-primary text-white font-bold text-xs shadow-md shadow-primary/20">1</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-xl border border-outline-variant/20 hover:bg-surface-container-low transition-colors text-xs font-bold">2</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-xl border border-outline-variant/20 hover:bg-surface-container-low transition-colors text-xs font-bold">3</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-xl border border-outline-variant/20 hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-sm">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>
