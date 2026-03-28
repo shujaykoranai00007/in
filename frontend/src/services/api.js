@@ -35,14 +35,30 @@ function normalizeApiEnvUrl(raw) {
 
 function resolveApiBaseUrl() {
   const isLocalhost = typeof window !== "undefined" && window.location.hostname === "localhost";
+  const isVercelHost =
+    typeof window !== "undefined" &&
+    String(window.location.hostname || "").toLowerCase().endsWith(".vercel.app");
   const envBase = normalizeApiEnvUrl(import.meta.env.VITE_API_URL);
+  const useRemoteApiOnLocalhost =
+    String(import.meta.env.VITE_USE_REMOTE_API || "").toLowerCase() === "true";
+  const forceCrossOriginOnHosted =
+    String(import.meta.env.VITE_FORCE_CROSS_ORIGIN_API || "").toLowerCase() === "true";
 
   // In local dev, prefer localhost backend; fall back to local port 5000.
   if (isLocalhost) {
+    if (useRemoteApiOnLocalhost && envBase) {
+      return envBase;
+    }
+
     const envLooksLocal =
       typeof envBase === "string" &&
       (envBase.startsWith("http://localhost:") || envBase.startsWith("http://127.0.0.1:"));
     return envLooksLocal ? envBase : "http://localhost:5000/api";
+  }
+
+  // On hosted Vercel, prefer same-origin /api rewrites to avoid browser CORS preflight issues.
+  if (isVercelHost && !forceCrossOriginOnHosted) {
+    return "/api";
   }
 
   // In hosted/production builds, use the env var injected at build time (e.g. from Vercel).
