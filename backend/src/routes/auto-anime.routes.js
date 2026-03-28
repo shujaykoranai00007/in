@@ -14,6 +14,14 @@ const RUNTIME_TICK_MIN_GAP_MS = 25000;
 let runtimeTickInFlight = false;
 let lastRuntimeTickAt = 0;
 
+function getInstantProcessOptions(postType) {
+  if (String(postType || "").toLowerCase() === "reel") {
+    return { maxAttempts: 8, waitMs: 5000 };
+  }
+
+  return { maxAttempts: 4, waitMs: 3500 };
+}
+
 autoAnimeRouter.use(authMiddleware);
 
 autoAnimeRouter.get("/", async (_req, res, next) => {
@@ -47,7 +55,10 @@ autoAnimeRouter.post("/run-now", async (_req, res, next) => {
 
     if (result?.queued) {
       // User expects run-now to post the just-queued item immediately when possible.
-      const instantProcess = await processPostNow(result.postId, { maxAttempts: 4, waitMs: 3500 });
+      const instantProcess = await processPostNow(
+        result.postId,
+        getInstantProcessOptions(result.postType)
+      );
 
       const latest = await Post.findById(result.postId).lean();
       if (latest) {
