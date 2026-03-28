@@ -109,128 +109,53 @@ function arePostListsEqual(previous = [], next = []) {
   return true;
 }
 
-const CUSTOM_THEME_STORAGE_KEY = "instaflow_custom_theme_v1";
 const ACTIVE_THEME_STORAGE_KEY = "instaflow_active_theme_v1";
 const INSTANT_POST_REQUEST_TIMEOUT_MS = 180000;
 
-const DEFAULT_CUSTOM_THEME = {
-  bgBase: "#edf5ff",
-  tintA: "#13e0b5",
-  tintB: "#ff9c41",
-  panelBg: "#f5fbff",
-  panelBorder: "#2f8cbc",
-  textMuted: "#37526a",
-  accent: "#00a7cc",
-  accentStrong: "#35e0b8",
-  danger: "#ff5a6f"
-};
-
-const CUSTOM_THEME_COMBOS = [
-  {
-    label: "Cyber Ice",
-    colors: {
-      bgBase: "#edf5ff",
-      tintA: "#17d0ff",
-      tintB: "#63ffe4",
-      panelBg: "#f3fbff",
-      panelBorder: "#2f89bc",
-      textMuted: "#36526a",
-      accent: "#00a7cc",
-      accentStrong: "#35e0b8",
-      danger: "#ff5a6f"
-    }
-  },
-  {
-    label: "Volt Purple",
-    colors: {
-      bgBase: "#f2eeff",
-      tintA: "#8a6bff",
-      tintB: "#f24bff",
-      panelBg: "#f7f3ff",
-      panelBorder: "#7a60d6",
-      textMuted: "#4e3f7f",
-      accent: "#7e57ff",
-      accentStrong: "#c94bff",
-      danger: "#ff4f85"
-    }
-  },
-  {
-    label: "Lava Pop",
-    colors: {
-      bgBase: "#fff1e8",
-      tintA: "#ff7a24",
-      tintB: "#ffcf3f",
-      panelBg: "#fff6ee",
-      panelBorder: "#d6863d",
-      textMuted: "#6f4a31",
-      accent: "#ff7a24",
-      accentStrong: "#ffb347",
-      danger: "#ff4e62"
-    }
-  },
-  {
-    label: "Neon Forest",
-    colors: {
-      bgBase: "#ebfff8",
-      tintA: "#00d09f",
-      tintB: "#00b9ff",
-      panelBg: "#f2fffb",
-      panelBorder: "#27a58f",
-      textMuted: "#2f5f64",
-      accent: "#00a39e",
-      accentStrong: "#33d2c5",
-      danger: "#ff4b6e"
-    }
-  },
-  {
-    label: "Midnight Mint",
-    colors: {
-      bgBase: "#e9f1ff",
-      tintA: "#2f67ff",
-      tintB: "#2fe4b9",
-      panelBg: "#f2f7ff",
-      panelBorder: "#4a7cd2",
-      textMuted: "#334f71",
-      accent: "#2f67ff",
-      accentStrong: "#2fe4b9",
-      danger: "#ff5b73"
-    }
-  }
-];
-
 function readStoredActiveTheme() {
   if (typeof window === "undefined") {
-    return "aurora";
+    return "light";
   }
 
   const stored = window.localStorage.getItem(ACTIVE_THEME_STORAGE_KEY);
-  return stored || "aurora";
+  return stored === "dark" ? "dark" : "light";
 }
 
-function readStoredCustomTheme() {
-  if (typeof window === "undefined") {
-    return DEFAULT_CUSTOM_THEME;
+function getProgressForPost(post) {
+  const status = String(post?.status || "pending").toLowerCase();
+  const attempts = Number(post?.attempts || 0);
+
+  if (status === "posted") {
+    return 100;
   }
 
-  try {
-    const stored = JSON.parse(window.localStorage.getItem(CUSTOM_THEME_STORAGE_KEY) || "{}");
-    return { ...DEFAULT_CUSTOM_THEME, ...stored };
-  } catch {
-    return DEFAULT_CUSTOM_THEME;
+  if (status === "failed") {
+    return 100;
   }
+
+  if (status === "processing") {
+    return Math.min(85, 52 + attempts * 12);
+  }
+
+  return 25;
 }
 
-function hexToRgba(hex, alpha) {
-  const value = String(hex || "").trim();
-  const normalized = value.startsWith("#") ? value.slice(1) : value;
-  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) {
-    return `rgba(0, 167, 204, ${alpha})`;
+function getProcessLabel(post) {
+  const status = String(post?.status || "pending").toLowerCase();
+
+  if (status === "posted") {
+    return "Published";
   }
 
-  const r = Number.parseInt(normalized.slice(0, 2), 16);
-  const g = Number.parseInt(normalized.slice(2, 4), 16);
-  const b = Number.parseInt(normalized.slice(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  if (status === "failed") {
+    return "Failed";
+  }
+
+  if (status === "processing") {
+    return "Instagram Upload In Progress";
+  }
+
+  return "Queued For Processing";
 }
 
 export default function DashboardView({ user, onLogout, instagramStatus }) {
@@ -247,7 +172,6 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
   const [newTimeSlot, setNewTimeSlot] = useState("");
 
   const [theme, setTheme] = useState(readStoredActiveTheme);
-  const [customTheme, setCustomTheme] = useState(readStoredCustomTheme);
   const [activeTab, setActiveTab] = useState("schedule");
   const [postType, setPostType] = useState("reel");
   const [caption, setCaption] = useState("");
@@ -315,6 +239,55 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
   }, [pendingPosts, history]);
 
   const activityFeedPreview = useMemo(() => activityFeed.slice(0, 8), [activityFeed]);
+
+  const liveProgressPosts = useMemo(() => {
+    const working = pendingPosts
+      .filter((post) => ["pending", "processing"].includes(String(post.status || "").toLowerCase()))
+      .slice(0, 6);
+
+    if (working.length) {
+      return working;
+    }
+
+    return history.slice(0, 4);
+  }, [history, pendingPosts]);
+
+  const monitorPipeline = useMemo(() => {
+    const recentHistory = history.slice(0, 20);
+    const postedCount = recentHistory.filter((post) => post.status === "posted").length;
+    const failedCount = recentHistory.filter((post) => post.status === "failed").length;
+    const inFlightCount = queueSnapshot.pendingCount + queueSnapshot.processingCount;
+    const completedCount = postedCount + failedCount;
+    const totalObserved = Math.max(1, inFlightCount + completedCount);
+    const overallProgress = Math.round((completedCount / totalObserved) * 100);
+
+    return [
+      {
+        key: "collect",
+        label: "Collect Media",
+        percent: inFlightCount > 0 || completedCount > 0 ? 100 : 0,
+        detail: "Candidate fetch + filter"
+      },
+      {
+        key: "prepare",
+        label: "Prepare Content",
+        percent: queueSnapshot.processingCount > 0 ? 72 : inFlightCount > 0 ? 45 : completedCount > 0 ? 100 : 0,
+        detail: "Transcode / metadata / queue"
+      },
+      {
+        key: "upload",
+        label: "Upload To Instagram",
+        percent: queueSnapshot.processingCount > 0 ? 82 : queueSnapshot.pendingCount > 0 ? 35 : completedCount > 0 ? 100 : 0,
+        detail: "Container + publish attempts"
+      },
+      {
+        key: "complete",
+        label: "Complete",
+        percent: overallProgress,
+        detail: `${postedCount} posted • ${failedCount} failed`
+      }
+    ];
+  }, [history, queueSnapshot.failedCount, queueSnapshot.pendingCount, queueSnapshot.processingCount]);
 
   const historyView = useMemo(
     () => history.map((post) => ({ ...post, summarizedError: summarizeErrorLog(post.errorLog) })),
@@ -754,47 +727,12 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
   }, [activeTab, instagramStatus?.valid]);
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme === "custom" ? "aurora" : theme);
-
-    const root = document.documentElement;
-    const customKeys = [
-      "--bg-base",
-      "--bg-tint-a",
-      "--bg-tint-b",
-      "--panel-bg",
-      "--panel-border",
-      "--text-muted",
-      "--accent",
-      "--accent-strong",
-      "--accent-shadow",
-      "--danger"
-    ];
-
-    if (theme === "custom") {
-      root.style.setProperty("--bg-base", customTheme.bgBase);
-      root.style.setProperty("--bg-tint-a", hexToRgba(customTheme.tintA, 0.2));
-      root.style.setProperty("--bg-tint-b", hexToRgba(customTheme.tintB, 0.18));
-      root.style.setProperty("--panel-bg", hexToRgba(customTheme.panelBg, 0.84));
-      root.style.setProperty("--panel-border", hexToRgba(customTheme.panelBorder, 0.34));
-      root.style.setProperty("--text-muted", customTheme.textMuted);
-      root.style.setProperty("--accent", customTheme.accent);
-      root.style.setProperty("--accent-strong", customTheme.accentStrong);
-      root.style.setProperty("--accent-shadow", hexToRgba(customTheme.accent, 0.3));
-      root.style.setProperty("--danger", customTheme.danger);
-    } else {
-      customKeys.forEach((key) => root.style.removeProperty(key));
-    }
+    document.documentElement.setAttribute("data-theme", theme);
 
     if (typeof window !== "undefined") {
       window.localStorage.setItem(ACTIVE_THEME_STORAGE_KEY, theme);
-      window.localStorage.setItem(CUSTOM_THEME_STORAGE_KEY, JSON.stringify(customTheme));
     }
-  }, [theme, customTheme]);
-
-  function applyCustomThemeCombo(combo) {
-    setCustomTheme(combo.colors);
-    setTheme("custom");
-  }
+  }, [theme]);
 
   async function submitSchedule(event) {
     event.preventDefault();
@@ -1125,7 +1063,7 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
   const activeToast = toasts[0] || null;
 
   return (
-    <div className="min-h-screen bg-grid px-4 pb-28 pt-2 text-slate-800 md:px-6 md:pb-8 md:pt-3 lg:pb-8">
+    <div className="min-h-screen bg-grid px-4 pb-28 pt-2 text-current md:px-6 md:pb-8 md:pt-3 lg:pb-8">
       <div className="mx-auto flex max-w-7xl flex-col gap-5">
         <Sidebar
           activeTab={activeTab}
@@ -1203,6 +1141,75 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                     <p className="mt-1 text-2xl font-bold font-display text-red-900">{queueSnapshot.failedCount}</p>
                   </div>
                 </div>
+
+                <div className="mt-5 rounded-xl border border-slate-200/70 bg-white/70 p-3">
+                  <h4 className="text-sm font-semibold">Overall Pipeline Progress</h4>
+                  <div className="mt-3 grid gap-3">
+                    {monitorPipeline.map((stage) => (
+                      <div key={stage.key} className="space-y-1.5">
+                        <div className="flex items-center justify-between text-xs font-semibold">
+                          <p>{stage.label}</p>
+                          <p>{stage.percent}%</p>
+                        </div>
+                        <div className="h-2.5 rounded-full bg-slate-200/80">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all duration-500"
+                            style={{ width: `${stage.percent}%` }}
+                          />
+                        </div>
+                        <p className="muted-text text-[11px]">{stage.detail}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-xl border border-slate-200/70 bg-white/70 p-3">
+                  <h4 className="text-sm font-semibold">Live Progress By Post</h4>
+                  <div className="mt-3 grid gap-3">
+                    {liveProgressPosts.map((post) => {
+                      const percent = getProgressForPost(post);
+                      const postLabel = getPostLabel(post);
+                      const processLabel = getProcessLabel(post);
+
+                      return (
+                        <div key={post._id} className="rounded-lg border border-slate-200/70 bg-white/85 px-3 py-2">
+                          <div className="flex items-center justify-between gap-3 text-xs">
+                            <p className="font-semibold">
+                              {postLabel} • {post._id?.slice(-6) || "N/A"}
+                            </p>
+                            <p className="font-semibold">{percent}%</p>
+                          </div>
+                          <div className="mt-2 h-2.5 rounded-full bg-slate-200/80">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-sky-500 to-blue-600 transition-all duration-500"
+                              style={{ width: `${percent}%` }}
+                            />
+                          </div>
+                          <p className="muted-text mt-1 text-[11px]">{processLabel}</p>
+                        </div>
+                      );
+                    })}
+                    {!liveProgressPosts.length && (
+                      <p className="muted-text text-xs">No active posts yet. Queue a reel/post to see progress bars.</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-xl border border-slate-200/70 bg-white/70 p-3">
+                  <h4 className="text-sm font-semibold">Current Running Processes</h4>
+                  <ul className="mt-2 space-y-2 text-xs">
+                    {activityFeedPreview.map((event) => (
+                      <li key={`process-${event.id}`} className="rounded-lg border border-slate-200/60 bg-white/85 px-3 py-2">
+                        <p className="font-semibold">{event.title}</p>
+                        {event.description && <p className="muted-text mt-0.5">{event.description}</p>}
+                        <p className="muted-text mt-1 text-[11px]">{formatDate(event.createdAt)}</p>
+                      </li>
+                    ))}
+                    {!activityFeedPreview.length && (
+                      <li className="muted-text">No process steps yet.</li>
+                    )}
+                  </ul>
+                </div>
               </section>
             </>
           )}
@@ -1212,15 +1219,13 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="muted-text text-xs uppercase tracking-[0.2em]">Control Center</p>
-                  <h3 className="text-lg font-bold font-display">Theme Lab</h3>
-                  <p className="muted-text mt-1 text-xs">Choose preset themes or build your own full color combination.</p>
+                  <h3 className="text-lg font-bold font-display">Theme Mode</h3>
+                  <p className="muted-text mt-1 text-xs">Professional UI with two modes only: Light and Dark.</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {[
-                    { key: "aurora", label: "Aurora" },
-                    { key: "sunset", label: "Sunset" },
-                    { key: "ocean", label: "Ocean" },
-                    { key: "custom", label: "Custom" }
+                    { key: "light", label: "Light" },
+                    { key: "dark", label: "Dark" }
                   ].map((item) => (
                     <button
                       key={item.key}
@@ -1232,57 +1237,6 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                     >
                       {item.label}
                     </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-4 rounded-xl border border-slate-200/70 bg-white/70 p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">Quick Color Combinations</p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {CUSTOM_THEME_COMBOS.map((combo) => (
-                    <button
-                      key={combo.label}
-                      type="button"
-                      onClick={() => applyCustomThemeCombo(combo)}
-                      className="ghost-btn flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-left"
-                    >
-                      <span className="text-xs font-semibold text-slate-700">{combo.label}</span>
-                      <span className="flex items-center gap-1">
-                        <span className="h-3 w-3 rounded-full border border-white" style={{ backgroundColor: combo.colors.accent }} />
-                        <span className="h-3 w-3 rounded-full border border-white" style={{ backgroundColor: combo.colors.accentStrong }} />
-                        <span className="h-3 w-3 rounded-full border border-white" style={{ backgroundColor: combo.colors.tintB }} />
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-4 rounded-xl border border-slate-200/70 bg-white/70 p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">Custom Color Builder</p>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {[
-                    ["bgBase", "Background Base"],
-                    ["tintA", "Glow Tint A"],
-                    ["tintB", "Glow Tint B"],
-                    ["panelBg", "Panel Background"],
-                    ["panelBorder", "Panel Border"],
-                    ["textMuted", "Muted Text"],
-                    ["accent", "Accent"],
-                    ["accentStrong", "Accent Strong"],
-                    ["danger", "Danger"]
-                  ].map(([key, label]) => (
-                    <label key={key} className="rounded-lg border border-slate-200 bg-white/80 px-2 py-2 text-xs font-semibold text-slate-600">
-                      <span>{label}</span>
-                      <input
-                        type="color"
-                        value={customTheme[key]}
-                        onChange={(event) => {
-                          setCustomTheme((prev) => ({ ...prev, [key]: event.target.value }));
-                          setTheme("custom");
-                        }}
-                        className="mt-2 h-9 w-full cursor-pointer rounded-md border border-slate-200 bg-transparent"
-                      />
-                    </label>
                   ))}
                 </div>
               </div>
