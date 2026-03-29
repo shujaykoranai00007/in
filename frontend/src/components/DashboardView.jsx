@@ -537,11 +537,12 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
     }
   }
 
-  async function activateDailyAutoSchedule() {
+  async function toggleDailyAutoSchedule() {
     if (!autoAnimeConfig) {
       return;
     }
 
+    const newEnabledState = !autoAnimeConfig.enabled;
     setAutoAnimeActivating(true);
     setAutoAnimeMessage("");
 
@@ -555,7 +556,7 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
 
       const payload = {
         ...autoAnimeConfig,
-        enabled: true,
+        enabled: newEnabledState,
         subreddits: String(autoAnimeConfig.subreddits || "")
           .split(",")
           .map((item) => item.trim())
@@ -575,20 +576,31 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
         timeSlots: (autoAnimeConfig.timeSlots || []).filter(Boolean)
       };
 
-      const { data } = await api.post("/auto-anime/activate-daily", payload);
-      if (data?.config) {
-        setAutoAnimeConfig(data.config);
+      if (newEnabledState) {
+        // Turning ON
+        const { data } = await api.post("/auto-anime/activate-daily", payload);
+        if (data?.config) setAutoAnimeConfig(data.config);
+        setAutoAnimeMessage(data?.message || "Daily auto scheduler activated.");
+        addActivityEvent({
+          tone: "success",
+          title: "Daily auto schedule activated",
+          description: "Saved time slots par daily auto post run hoga."
+        });
+      } else {
+        // Turning OFF
+        const { data } = await api.patch("/auto-anime", payload);
+        if (data) setAutoAnimeConfig(data);
+        setAutoAnimeMessage("Daily auto scheduler stopped successfully.");
+        addActivityEvent({
+          tone: "neutral",
+          title: "Daily auto schedule stopped",
+          description: "Auto posts will no longer run automatically."
+        });
       }
 
-      setAutoAnimeMessage(data?.message || "Daily auto scheduler activated.");
-      addActivityEvent({
-        tone: "success",
-        title: "Daily auto schedule activated",
-        description: "Saved time slots par daily auto post run hoga."
-      });
       await loadPosts();
     } catch (error) {
-      setAutoAnimeMessage(error?.response?.data?.message || "Could not activate daily auto scheduler.");
+      setAutoAnimeMessage(error?.response?.data?.message || "Could not toggle daily auto scheduler.");
     } finally {
       setAutoAnimeActivating(false);
     }
@@ -1692,11 +1704,11 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                   </button>
                   <button
                     type="button"
-                    onClick={activateDailyAutoSchedule}
+                    onClick={toggleDailyAutoSchedule}
                     disabled={autoAnimeActivating || autoAnimeLoading || autoAnimeRunning || !autoAnimeConfig}
-                    className="pro-btn px-3 py-2 text-xs disabled:opacity-60"
+                    className={`pro-btn px-3 py-2 text-xs disabled:opacity-60 transition-colors ${autoAnimeConfig?.enabled ? "bg-red-500/90 hover:bg-red-500 border-red-500 text-white shadow-[#ef44443a]" : ""}`}
                   >
-                    {autoAnimeActivating ? "Activating..." : "Start Daily Auto"}
+                    {autoAnimeActivating ? "Processing..." : autoAnimeConfig?.enabled ? "Stop Daily Auto" : "Start Daily Auto"}
                   </button>
                 </div>
               </div>
@@ -1707,16 +1719,7 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
 
               {autoAnimeConfig && (
                 <div className="mt-5 grid gap-4 md:grid-cols-2">
-                  <label className="text-sm text-muted">
-                    <span className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(autoAnimeConfig.enabled)}
-                        onChange={(e) => updateAutoAnimeField("enabled", e.target.checked)}
-                      />
-                      Enable auto anime scheduling
-                    </span>
-                  </label>
+
 
                   <label className="text-sm text-muted">
                     Timezone
