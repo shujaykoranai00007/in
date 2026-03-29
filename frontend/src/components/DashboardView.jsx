@@ -512,30 +512,16 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
         contentType: autoAnimeConfig?.contentType || "both"
       });
       if (data.queued) {
-        const status = String(data.status || "pending").toLowerCase();
-        if (status === "posted") {
-          setAutoAnimeMessage(`Instantly posted ${data.postType || "reel"} from r/${data.subreddit}: ${data.title}`);
-        } else if (status === "failed") {
-          setAutoAnimeMessage(
-            `Queued ${data.postType || "reel"} but instant upload failed: ${data.errorLog || "Check queue/error log."}`
-          );
-        } else {
-          setAutoAnimeMessage(`Queued ${data.postType || "reel"} from r/${data.subreddit}: ${data.title}`);
-        }
+        setAutoAnimeMessage(data.message || "Search & Generation started in background. Please wait 1-2 minutes.");
+        
         addActivityEvent({
-          tone: status === "posted" ? "success" : status === "failed" ? "danger" : "info",
-          title:
-            status === "posted"
-              ? `${String(data.postType || "reel").toUpperCase()} posted instantly`
-              : `${String(data.postType || "reel").toUpperCase()} queued from auto anime`,
-          description:
-            status === "failed"
-              ? data.errorLog || "Instant upload failed."
-              : data.title
-                ? `${data.title}`
-                : "Auto anime added new content to queue."
+          tone: "info",
+          title: "Background Search Started",
+          description: "System is searching Reddit and generating media. This may take 60-90 seconds."
         });
-        await loadPosts();
+
+        // Set a small timer to reload posts in 45 seconds, just in case
+        setTimeout(() => loadPosts({ silent: true }), 45000);
       } else {
         setAutoAnimeMessage(data.message || "No matching anime content was found this time.");
       }
@@ -1211,14 +1197,17 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                           <div className="status-line opacity-40 italic">Waiting for pipeline activity...</div>
                         )}
                       </AnimatePresence>
-                      {autoAnimeActivating && (
+                      {(autoAnimeActivating || autoAnimeRunning) && (
                         <motion.div 
                           animate={{ opacity: [0.3, 1, 0.3] }}
                           transition={{ duration: 1, repeat: Infinity }}
-                          className="status-line font-bold text-amber-400"
+                          className="status-line mt-2 font-bold text-sky-400"
                         >
-                          Running: Fetching latest candidates from Reddit...
+                          Background Task: Fetching candidates from Reddit & Analyzing with AI...
                         </motion.div>
+                      )}
+                      {!autoAnimeActivating && !autoAnimeRunning && activityFeedPreview.length === 0 && (
+                        <div className="status-line opacity-40 italic">Waiting for pipeline activity...</div>
                       )}
                     </div>
                   </div>
