@@ -51,25 +51,24 @@ autoAnimeRouter.post("/run-now", async (_req, res, next) => {
       await updateAutoAnimeConfig(payload);
     }
 
-    const result = await runAutoAnimeNow({ queueDelaySeconds: 0 });
-
-    if (result?.queued) {
-      // Kick off processing in the background without waiting (to prevent Vercel UI timeout).
-      processPostNow(
-        result.postId,
-        getInstantProcessOptions(result.postType)
-      ).catch((err) => console.error("Background auto upload error:", err));
-
-      const updated = await Post.findById(result.postId).lean();
-      return res.json({
-        ...result,
-        status: updated?.status || result.status,
-        message: "Reel queued for background processing. Check status in a minute.",
-        instantProcess: { state: "Processing in background" }
+    // Run fetch, download, FFMPEG merge, and upload completely in background
+    runAutoAnimeNow({ queueDelaySeconds: 0 })
+      .then((result) => {
+        if (result?.queued && result.postId) {
+          processPostNow(
+            result.postId,
+            getInstantProcessOptions(result.postType)
+          ).catch((err) => console.error("Background auto upload error:", err));
+        }
+      })
+      .catch((err) => {
+        console.error("runAutoAnimeNow BG failed:", err);
       });
-    }
 
-    return res.json(result);
+    return res.json({
+      queued: true,
+      message: "Search & Media generation started in background. Please wait 1-2 minutes and check Queue/History."
+    });
   } catch (error) {
     return next(error);
   }
