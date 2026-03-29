@@ -1708,7 +1708,7 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
               {autoAnimeConfig && (
                 <div className="mt-5 grid gap-4 md:grid-cols-2">
                   <label className="text-sm text-muted">
-                    <span className="flex items-center gap-2 text-slate-100">
+                    <span className="flex items-center gap-2">
                       <input
                         type="checkbox"
                         checked={Boolean(autoAnimeConfig.enabled)}
@@ -1743,7 +1743,7 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                   </label>
 
                   <label className="text-sm text-muted">
-                    <span className="flex items-center gap-2 text-slate-100">
+                    <span className="flex items-center gap-2">
                       <input
                         type="checkbox"
                         checked={autoAnimeConfig.randomMode !== false}
