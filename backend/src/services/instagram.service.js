@@ -387,7 +387,7 @@ async function transcodeToInstagramReel(inputPath, outputPath) {
     "-c:v",
     "libx264",
     "-preset",
-    "veryfast",
+    "ultrafast",
     "-profile:v",
     "main",
     "-level:v",
@@ -467,10 +467,8 @@ async function normalizeReelMedia(post) {
     // Keep existing flow for invalid URLs; validatePublicMediaUrl handles these later.
   }
 
-  if (!canHostPublicMedia()) {
-    console.log("[Reel] Skipping normalization - no public media hosting available");
-    return post;
-  }
+  // Normalization will now run even on localhost, relying on the
+  // fallback mirror (e.g. catbox, 0x0.st) to make the normalized video public later.
 
   // If media URL already ends with /media/ (local generated reel), it's pre-formatted for Instagram
   // Skip extra transcoding to avoid double-processing
@@ -614,7 +612,9 @@ export async function createMediaContainer(post) {
   try {
     return await createWithPost(post);
   } catch (error) {
-    if ((post.postType === "reel" || post.postType === "post") && (isInstagramFetchError(error) || isInstagramMediaTypeError(error))) {
+    const isLocalhostError = String(error?.message || "").includes("publicly reachable");
+    if ((post.postType === "reel" || post.postType === "post") && 
+        (isInstagramFetchError(error) || isInstagramMediaTypeError(error) || isLocalhostError)) {
       try {
         const token = String(post._id || Date.now()).replace(/[^a-zA-Z0-9_-]/g, "");
         console.warn(`[Instagram] Trying mirror fallback for ${post.postType} URL: ${post.mediaUrl.substring(0, 80)}`);

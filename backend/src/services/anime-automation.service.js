@@ -513,7 +513,7 @@ async function muxVideoWithAudio(videoPath, audioPath, outputPath) {
       "-c:v",
       "libx264",
       "-preset",
-      "veryfast",
+      "ultrafast",
       "-profile:v",
       "main",
       "-level:v",
@@ -576,11 +576,9 @@ async function prepareReelWithAudio(candidate) {
     return candidate.mediaUrl;
   }
 
-  // For reliable audio reels, we prefer muxed video+audio, but fall back to direct reel URL
-  // so reel-only automation doesn't fail when Reddit DASH audio is unavailable.
-  if (!hasUsablePublicBaseUrl()) {
-    return candidate.mediaUrl;
-  }
+  // We prefer muxed video+audio. Even on localhost, we generate the local file
+  // so that the instagram service can mirror it to a public host (like catbox) before posting.
+
 
   const dashUrl = candidate.dashUrl || deriveDashUrlFromReelUrl(candidate.mediaUrl);
   const audioUrl = await pickDashAudioUrl(dashUrl);
@@ -656,10 +654,10 @@ async function cacheAutoImageCandidate(candidate) {
       throw new Error(`Unsupported image content-type: ${contentType || "unknown"}`);
     }
 
-    // If no usable public base URL is configured, keep source URL only after successful validation.
-    if (!hasUsablePublicBaseUrl()) {
-      return candidate.mediaUrl;
-    }
+    // Even if no usable public base URL is configured, we return the localhost URL.
+    // The instagram service has a fallback mirror mechanism that will upload this
+    // local file to a temporary file host so Instagram can access it.
+
 
     const safeId = String(candidate.sourceId || Date.now()).replace(/[^a-zA-Z0-9_-]/g, "");
     const filename = `auto-${Date.now()}-${safeId}.jpg`;

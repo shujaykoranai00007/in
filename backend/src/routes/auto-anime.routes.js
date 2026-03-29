@@ -54,24 +54,19 @@ autoAnimeRouter.post("/run-now", async (_req, res, next) => {
     const result = await runAutoAnimeNow({ queueDelaySeconds: 0 });
 
     if (result?.queued) {
-      // User expects run-now to post the just-queued item immediately when possible.
-      const instantProcess = await processPostNow(
+      // Kick off processing in the background without waiting (to prevent Vercel UI timeout).
+      processPostNow(
         result.postId,
         getInstantProcessOptions(result.postType)
-      );
+      ).catch((err) => console.error("Background auto upload error:", err));
 
-      const latest = await Post.findById(result.postId).lean();
-      if (latest) {
-        return res.json({
-          ...result,
-          status: latest.status,
-          postedAt: latest.postedAt || null,
-          errorLog: latest.errorLog || "",
-          instantProcess
-        });
-      }
-
-      return res.json({ ...result, instantProcess });
+      const updated = await Post.findById(result.postId).lean();
+      return res.json({
+        ...result,
+        status: updated?.status || result.status,
+        message: "Reel queued for background processing. Check status in a minute.",
+        instantProcess: { state: "Processing in background" }
+      });
     }
 
     return res.json(result);
