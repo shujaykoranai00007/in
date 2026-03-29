@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   AlertTriangle,
   Download,
@@ -8,19 +8,10 @@ import {
   Link2,
   Plus,
   Trash2,
-  Upload,
-  Activity,
-  CheckCircle,
-  Clock,
-  Settings,
-  Zap,
-  ChevronRight,
-  Terminal,
-  Layers
+  Upload
 } from "lucide-react";
 import api from "../services/api";
 import Sidebar from "./Sidebar";
-import CircularProgress from "./CircularProgress";
 
 function formatDate(dateString) {
   return new Date(dateString).toLocaleString();
@@ -546,12 +537,11 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
     }
   }
 
-  async function toggleDailyAutoSchedule() {
+  async function activateDailyAutoSchedule() {
     if (!autoAnimeConfig) {
       return;
     }
 
-    const newEnabledState = !autoAnimeConfig.enabled;
     setAutoAnimeActivating(true);
     setAutoAnimeMessage("");
 
@@ -565,7 +555,7 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
 
       const payload = {
         ...autoAnimeConfig,
-        enabled: newEnabledState,
+        enabled: true,
         subreddits: String(autoAnimeConfig.subreddits || "")
           .split(",")
           .map((item) => item.trim())
@@ -585,31 +575,20 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
         timeSlots: (autoAnimeConfig.timeSlots || []).filter(Boolean)
       };
 
-      if (newEnabledState) {
-        // Turning ON
-        const { data } = await api.post("/auto-anime/activate-daily", payload);
-        if (data?.config) setAutoAnimeConfig(data.config);
-        setAutoAnimeMessage(data?.message || "Daily auto scheduler activated.");
-        addActivityEvent({
-          tone: "success",
-          title: "Daily auto schedule activated",
-          description: "Saved time slots par daily auto post run hoga."
-        });
-      } else {
-        // Turning OFF
-        const { data } = await api.patch("/auto-anime", payload);
-        if (data) setAutoAnimeConfig(data);
-        setAutoAnimeMessage("Daily auto scheduler stopped successfully.");
-        addActivityEvent({
-          tone: "neutral",
-          title: "Daily auto schedule stopped",
-          description: "Auto posts will no longer run automatically."
-        });
+      const { data } = await api.post("/auto-anime/activate-daily", payload);
+      if (data?.config) {
+        setAutoAnimeConfig(data.config);
       }
 
+      setAutoAnimeMessage(data?.message || "Daily auto scheduler activated.");
+      addActivityEvent({
+        tone: "success",
+        title: "Daily auto schedule activated",
+        description: "Saved time slots par daily auto post run hoga."
+      });
       await loadPosts();
     } catch (error) {
-      setAutoAnimeMessage(error?.response?.data?.message || "Could not toggle daily auto scheduler.");
+      setAutoAnimeMessage(error?.response?.data?.message || "Could not activate daily auto scheduler.");
     } finally {
       setAutoAnimeActivating(false);
     }
@@ -1147,104 +1126,42 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
               </section>
 
               <section className="glass-panel screen-frame rounded-2xl p-4 md:p-5">
-              <section className="glass-panel screen-frame relative overflow-hidden rounded-3xl p-6 md:p-8">
-                <div className="flex flex-col items-center justify-center gap-8 md:flex-row md:items-start md:justify-between">
-                  <div className="flex flex-col items-center gap-4 text-center md:items-start md:text-left">
-                    <div className="flex items-center gap-2 rounded-full bg-blue-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-blue-500">
-                      <Zap size={10} />
-                      System Active
-                    </div>
-                    <h3 className="text-3xl font-bold font-display tracking-tight">Live Pipeline</h3>
-                    <p className="muted-text max-w-xs text-sm">Real-time visualization of your automation engine processing content.</p>
-                    
-                    <div className="mt-4 flex gap-4">
-                      <div className="flex flex-col">
-                        <span className="text-xs font-bold uppercase tracking-tighter opacity-40">Queue</span>
-                        <span className="text-xl font-bold">{queueSnapshot.pendingCount + queueSnapshot.processingCount}</span>
-                      </div>
-                      <div className="h-10 w-px bg-slate-200/50" />
-                      <div className="flex flex-col">
-                        <span className="text-xs font-bold uppercase tracking-tighter opacity-40">Completed</span>
-                        <span className="text-xl font-bold">{queueSnapshot.failedCount + (history.filter(p => p.status === 'posted').length)}</span>
-                      </div>
-                    </div>
+                <h3 className="text-base font-bold font-display">Queue Snapshot</h3>
+                <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-900">Pending</p>
+                    <p className="mt-1 text-2xl font-bold font-display text-amber-900">{queueSnapshot.pendingCount}</p>
                   </div>
-
-                  <div className="relative">
-                    <CircularProgress 
-                      size={200} 
-                      strokeWidth={12} 
-                      percent={monitorPipeline.find(s => s.key === 'complete')?.percent || 0}
-                      label="Overall"
-                    />
-                    <motion.div 
-                      animate={{ opacity: [0.4, 0.7, 0.4] }} 
-                      transition={{ duration: 2, repeat: Infinity }}
-                      className="absolute -inset-4 -z-10 rounded-full bg-blue-500/5 blur-2xl" 
-                    />
+                  <div className="rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-900">Processing</p>
+                    <p className="mt-1 text-2xl font-bold font-display text-cyan-900">{queueSnapshot.processingCount}</p>
+                  </div>
+                  <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-red-900">Failed (History)</p>
+                    <p className="mt-1 text-2xl font-bold font-display text-red-900">{queueSnapshot.failedCount}</p>
                   </div>
                 </div>
 
-                <div className="mt-10 grid gap-6 lg:grid-cols-2">
-                  <div className="space-y-4">
-                    <h4 className="flex items-center gap-2 text-sm font-bold">
-                      <Terminal size={16} className="text-blue-500" />
-                      Real-time Status Monitor
-                    </h4>
-                    <div className="status-terminal min-h-[160px] shadow-inner">
-                      <AnimatePresence mode="popLayout">
-                        {activityFeedPreview.length > 0 ? (
-                          activityFeedPreview.map((event, i) => (
-                            <motion.div
-                              key={event.id}
-                              initial={{ opacity: 0, x: -10 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              exit={{ opacity: 0 }}
-                              className="status-line"
-                              style={{ opacity: 1 - i * 0.12 }}
-                            >
-                              <span className="font-bold text-white/40">[{new Date(event.createdAt).toLocaleTimeString([], { hour12: false })}]</span> {event.title}
-                              {event.description && <span className="ml-2 opacity-50 text-[10px] italic">({event.description})</span>}
-                            </motion.div>
-                          ))
-                        ) : (
-                          <div className="status-line opacity-40 italic">Waiting for pipeline activity...</div>
-                        )}
-                      </AnimatePresence>
-                      {autoAnimeActivating && (
-                        <motion.div 
-                          animate={{ opacity: [0.3, 1, 0.3] }}
-                          transition={{ duration: 1, repeat: Infinity }}
-                          className="status-line font-bold text-amber-400"
-                        >
-                          Running: Fetching latest candidates from Reddit...
-                        </motion.div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <h4 className="flex items-center gap-2 text-sm font-bold">
-                      <Layers size={16} className="text-emerald-500" />
-                      Stage Breakdown
-                    </h4>
-                    <div className="grid gap-3">
-                      {monitorPipeline.map((stage) => (
-                        <div key={stage.key} className="group rounded-2xl border border-slate-200/50 bg-white/40 p-3 transition-colors hover:border-blue-500/30">
-                          <div className="flex items-center justify-between text-xs">
-                            <div className="flex items-center gap-3">
-                              <div className={`h-2 w-2 rounded-full ${stage.percent === 100 ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : stage.percent > 0 ? 'bg-blue-500 animate-pulse' : 'bg-slate-300'}`} />
-                              <span className="font-bold">{stage.label}</span>
-                            </div>
-                            <span className="font-bold opacity-60">{stage.percent}%</span>
-                          </div>
-                          <div className="mt-2 text-[10px] text-muted">{stage.detail}</div>
+                <div className="mt-5 rounded-xl border border-slate-200/70 bg-white/70 p-3">
+                  <h4 className="text-sm font-semibold">Overall Pipeline Progress</h4>
+                  <div className="mt-3 grid gap-3">
+                    {monitorPipeline.map((stage) => (
+                      <div key={stage.key} className="space-y-1.5">
+                        <div className="flex items-center justify-between text-xs font-semibold">
+                          <p>{stage.label}</p>
+                          <p>{stage.percent}%</p>
                         </div>
-                      ))}
-                    </div>
+                        <div className="h-2.5 rounded-full bg-slate-200/80">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all duration-500"
+                            style={{ width: `${stage.percent}%` }}
+                          />
+                        </div>
+                        <p className="muted-text text-[11px]">{stage.detail}</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              </section>
 
                 <div className="mt-4 rounded-xl border border-slate-200/70 bg-white/70 p-3">
                   <h4 className="text-sm font-semibold">Live Progress By Post</h4>
@@ -1775,11 +1692,11 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                   </button>
                   <button
                     type="button"
-                    onClick={toggleDailyAutoSchedule}
+                    onClick={activateDailyAutoSchedule}
                     disabled={autoAnimeActivating || autoAnimeLoading || autoAnimeRunning || !autoAnimeConfig}
-                    className={`pro-btn px-3 py-2 text-xs disabled:opacity-60 transition-colors ${autoAnimeConfig?.enabled ? "bg-red-500/90 hover:bg-red-500 border-red-500 text-white shadow-[#ef44443a]" : ""}`}
+                    className="pro-btn px-3 py-2 text-xs disabled:opacity-60"
                   >
-                    {autoAnimeActivating ? "Processing..." : autoAnimeConfig?.enabled ? "Stop Daily Auto" : "Start Daily Auto"}
+                    {autoAnimeActivating ? "Activating..." : "Start Daily Auto"}
                   </button>
                 </div>
               </div>
@@ -1790,7 +1707,16 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
 
               {autoAnimeConfig && (
                 <div className="mt-5 grid gap-4 md:grid-cols-2">
-
+                  <label className="text-sm text-muted">
+                    <span className="flex items-center gap-2 text-slate-100">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(autoAnimeConfig.enabled)}
+                        onChange={(e) => updateAutoAnimeField("enabled", e.target.checked)}
+                      />
+                      Enable auto anime scheduling
+                    </span>
+                  </label>
 
                   <label className="text-sm text-muted">
                     Timezone
@@ -1817,7 +1743,7 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                   </label>
 
                   <label className="text-sm text-muted">
-                    <span className="flex items-center gap-2">
+                    <span className="flex items-center gap-2 text-slate-100">
                       <input
                         type="checkbox"
                         checked={autoAnimeConfig.randomMode !== false}

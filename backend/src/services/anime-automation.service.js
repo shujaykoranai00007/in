@@ -9,6 +9,7 @@ import { Post } from "../models/Post.js";
 import { fileURLToPath } from "url";
 import { getRedditAnimeCandidates } from "./anime-fetch.service.js";
 import { uploadFile as uploadToGoogleDrive } from "./google-drive.service.js";
+import { generateSmartCaption } from "./ai.service.js";
 
 const SLOT_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const DEFAULT_SLOTS = ["09:00", "12:30", "18:00"];
@@ -1067,12 +1068,27 @@ export async function runAutoAnimeNow(options = {}) {
       };
     }
 
-    console.log(`[AUTO ANIME] 📝 Creating post in queue...`);
+    console.log(`[AUTO ANIME] 📝 Content analysis & caption generation...`);
     const rotating = pickRotatingHashtagSet(config);
     const rotatingKeywords = pickRotatingKeywordSet(config);
+    
+    let finalCaption = renderCaption(config.captionTemplate, candidate, rotating.text, rotatingKeywords.text);
+    
+    // Attempt AI Smart Caption
+    try {
+      const aiResult = await generateSmartCaption(candidate.mediaUrl, candidate.title, candidate.postType || "reel");
+      if (aiResult?.caption) {
+        console.log(`[AUTO ANIME] ✨ AI Smart Caption applied.`);
+        // Combine AI caption with hashtags and a separator
+        finalCaption = `${aiResult.caption}\n\n${aiResult.hashtags || rotating.text}`;
+      }
+    } catch (err) {
+      console.log(`[AUTO ANIME] ⚠️ AI Captioning failed, using template: ${err.message}`);
+    }
+
     const post = await Post.create({
       mediaUrl: preparedMediaUrl,
-      caption: renderCaption(config.captionTemplate, candidate, rotating.text, rotatingKeywords.text),
+      caption: finalCaption,
       postType: candidate.postType || "reel",
       scheduledTime: new Date(Date.now() + queueDelaySeconds * 1000),
       status: "pending",
