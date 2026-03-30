@@ -194,7 +194,7 @@ function isInstagramProcessingFetchError(error) {
   );
 }
 
-async function uploadTo0x0St(filePath) {
+export async function uploadTo0x0St(filePath) {
   const form = new FormData();
   form.append("file", fs.createReadStream(filePath));
 
@@ -213,7 +213,7 @@ async function uploadTo0x0St(filePath) {
   return url;
 }
 
-async function uploadToCatbox(filePath) {
+export async function uploadToCatbox(filePath) {
   const form = new FormData();
   form.append("reqtype", "fileupload");
   form.append("fileToUpload", fs.createReadStream(filePath));

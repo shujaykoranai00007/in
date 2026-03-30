@@ -10,6 +10,8 @@ import { fileURLToPath } from "url";
 import { getRedditAnimeCandidates } from "./anime-fetch.service.js";
 import { uploadFile as uploadToGoogleDrive } from "./google-drive.service.js";
 import { generateSmartCaption } from "./ai.service.js";
+import { env } from "../config/env.js";
+import { uploadToCatbox, uploadTo0x0St } from "./instagram.service.js";
 
 const SLOT_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const DEFAULT_SLOTS = ["09:00", "12:30", "18:00"];
@@ -611,8 +613,22 @@ async function prepareReelWithAudio(candidate) {
     // Public base URL check ensures we upload for persistent hosts, not local/frontend-only
     if (isHostedRender) {
       if (!env.googleClientId || !env.googleRefreshToken) {
-        console.warn(`[AUTO ANIME] ⚠️  Google Drive credentials missing in .env. Falling back to local /media...`);
-        return `${getPublicBaseUrl()}/media/${outputName}`;
+        console.log(`[AUTO ANIME] ☁️ Google Drive missing. Using public mirror (Catbox/0x0.st) for Render persistence...`);
+        try {
+          const mirroredUrl = await uploadToCatbox(outputPath);
+          console.log(`[AUTO ANIME] ✅ Public mirror ready: ${mirroredUrl}`);
+          return mirroredUrl;
+        } catch (mirrorErr) {
+          console.warn(`[AUTO ANIME] ⚠️ Catbox mirror failed, trying 0x0.st:`, mirrorErr.message);
+          try {
+            const mirroredUrl = await uploadTo0x0St(outputPath);
+            console.log(`[AUTO ANIME] ✅ Public mirror (0x0.st) ready: ${mirroredUrl}`);
+            return mirroredUrl;
+          } catch (altMirrorErr) {
+            console.warn(`[AUTO ANIME] ⚠️ All mirrors failed. Falling back to local...`);
+            return `${getPublicBaseUrl()}/media/${outputName}`;
+          }
+        }
       }
 
       try {
@@ -621,9 +637,13 @@ async function prepareReelWithAudio(candidate) {
         console.log(`[AUTO ANIME] ✅ Google Drive upload complete: ${driveResult.fileId}`);
         return driveResult.mediaUrl;
       } catch (driveError) {
-        // Fallback to local /media path if Drive upload fails
-        console.warn(`[AUTO ANIME] ⚠️  Google Drive upload failed, falling back to local /media:`, driveError?.message || driveError);
-        return `${getPublicBaseUrl()}/media/${outputName}`;
+        // Fallback to public mirrors if Drive upload fails
+        console.warn(`[AUTO ANIME] ⚠️  Google Drive upload failed, trying public mirror:`, driveError?.message || driveError);
+        try {
+           return await uploadToCatbox(outputPath);
+        } catch (mirrorErr) {
+           return `${getPublicBaseUrl()}/media/${outputName}`;
+        }
       }
     }
 
