@@ -217,59 +217,37 @@ function extractImageCandidate(post, config) {
 
 async function fetchSubredditFeed(subreddit, sort = "hot") {
   const endpoint = `/r/${encodeURIComponent(subreddit)}/${sort}.json`;
-  let lastError = null;
-
-  console.log(`[REDDIT FETCH] Fetching ${subreddit}/${sort} from ${REDDIT_BASE_URLS.length} hosts...`);
-
   for (const baseURL of REDDIT_BASE_URLS) {
     const redditClient = createRedditClient(baseURL);
-
-    for (let attempt = 1; attempt <= REDDIT_REQUEST_MAX_ATTEMPTS; attempt += 1) {
-      try {
-        console.log(`[REDDIT FETCH] Attempt ${attempt}/${REDDIT_REQUEST_MAX_ATTEMPTS} to ${baseURL}${endpoint}`);
-        const { data } = await redditClient.get(endpoint, {
-          params: {
-            limit: REDDIT_LIMIT,
-            raw_json: 1,
-            t: "day"
-          }
-        });
-
-        const children = data?.data?.children || [];
-        const posts = children.map((item) => item?.data).filter(Boolean);
-        
-        if (posts.length) {
-          console.log(`[REDDIT FETCH] ✅ Success on ${baseURL}: got ${posts.length} posts from ${subreddit}/${sort}`);
-          return posts;
-        }
-
-        console.log(`[REDDIT FETCH] ⚠️  No posts returned from ${baseURL}${endpoint}, trying next host...`);
-        break;
-      } catch (error) {
-        lastError = error;
-        const status = Number(error?.response?.status || 0);
-        const statusText = error?.response?.statusText || "UNKNOWN";
-
-        console.log(`[REDDIT FETCH] ❌ Attempt ${attempt}/${REDDIT_REQUEST_MAX_ATTEMPTS} failed: ${status} ${statusText} from ${baseURL}`);
-        console.log(`[REDDIT FETCH]    Error: ${error?.message || error}`);
-
-        // Retry once for transient issues; then move to next Reddit host.
-        if (attempt < REDDIT_REQUEST_MAX_ATTEMPTS && (status === 429 || status >= 500 || status === 0)) {
-          const delayMs = 350 * attempt;
-          console.log(`[REDDIT FETCH]    Retrying in ${delayMs}ms (status ${status} is transient)...`);
-          await delay(delayMs);
-          continue;
-        }
-
-        console.log(`[REDDIT FETCH]    Moving to next host...`);
-        break;
-      }
-    }
+    try {
+      const { data } = await redditClient.get(endpoint, {
+        params: { limit: REDDIT_LIMIT, raw_json: 1, t: "day" }
+      });
+      const children = data?.data?.children || [];
+      const posts = children.map((item) => item?.data).filter(Boolean);
+      if (posts.length) return posts;
+    } catch (err) { /* ignore and try next host */ }
   }
-
-  console.error(`[REDDIT FETCH] ❌ FAILED all hosts for ${subreddit}/${sort}: ${lastError?.message || "no posts found"}`);
-  throw lastError || new Error("Unable to fetch subreddit feed from Reddit");
+  return [];
 }
+
+async function fetchRedditSearch(query, sort = "hot") {
+  const endpoint = `/search.json`;
+  for (const baseURL of REDDIT_BASE_URLS) {
+    const redditClient = createRedditClient(baseURL);
+    try {
+      const { data } = await redditClient.get(endpoint, {
+        params: { q: query, sort, limit: REDDIT_LIMIT, raw_json: 1, t: "day" }
+      });
+      const children = data?.data?.children || [];
+      const posts = children.map((item) => item?.data).filter(Boolean);
+      if (posts.length) return posts;
+    } catch (err) { /* try next host */ }
+  }
+  return [];
+}
+
+
 
 export async function getRedditAnimeCandidates(config) {
   const subreddits = config.subreddits.length ? config.subreddits : ["AnimeEdit"];
@@ -321,7 +299,20 @@ export async function getRedditAnimeCandidates(config) {
     }
   }
 
+  if (results.length === 0) {
+    console.log(`[REDDIT CANDIDATES] 🔦 No results from subreddits. Trying global search fallback...`);
+    const searchPosts = await fetchRedditSearch("anime edit", "hot");
+    for (const post of searchPosts) {
+      if (post.stickied || post.over_18 || post.is_gallery) continue;
+      const reelCandidate = extractReelCandidate(post, config);
+      if (reelCandidate) results.push(reelCandidate);
+      const imageCandidate = extractImageCandidate(post, config);
+      if (imageCandidate) results.push(imageCandidate);
+    }
+  }
+
   console.log(`[REDDIT CANDIDATES] Deduplicating ${results.length} total results...`);
+
   const deduped = new Map();
   for (const item of results) {
     const dedupeKey = `${item.sourceId}:${item.postType}`;

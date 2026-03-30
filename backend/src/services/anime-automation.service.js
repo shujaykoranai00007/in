@@ -545,6 +545,8 @@ async function muxVideoWithAudio(videoPath, audioPath, outputPath) {
       "44100",
       "-ac",
       "2",
+      "-threads",
+      "0",
       "-movflags",
       "+faststart",
       "-max_muxing_queue_size",
@@ -607,9 +609,12 @@ async function prepareReelWithAudio(candidate) {
 
     // For hosted Render backend, upload to Google Drive instead of using ephemeral /uploads
     // Public base URL check ensures we upload for persistent hosts, not local/frontend-only
-    const isHostedRender = getPublicBaseUrl().includes(".onrender.com");
-    
     if (isHostedRender) {
+      if (!env.googleClientId || !env.googleRefreshToken) {
+        console.warn(`[AUTO ANIME] ⚠️  Google Drive credentials missing in .env. Falling back to local /media...`);
+        return `${getPublicBaseUrl()}/media/${outputName}`;
+      }
+
       try {
         console.log(`[AUTO ANIME] 📤 Uploading reel to Google Drive for persistent storage...`);
         const driveResult = await uploadToGoogleDrive(outputPath, outputName, "reel");
@@ -617,7 +622,7 @@ async function prepareReelWithAudio(candidate) {
         return driveResult.mediaUrl;
       } catch (driveError) {
         // Fallback to local /media path if Drive upload fails
-        console.warn(`[AUTO ANIME] ⚠️  Google Drive upload failed, falling back to local /media:`, driveError?.message);
+        console.warn(`[AUTO ANIME] ⚠️  Google Drive upload failed, falling back to local /media:`, driveError?.message || driveError);
         return `${getPublicBaseUrl()}/media/${outputName}`;
       }
     }
@@ -941,11 +946,18 @@ export async function runAutoAnimeNow(options = {}) {
     const requestedDelaySeconds = Number(options?.queueDelaySeconds);
     const queueDelaySeconds =
       trigger === "manual"
-        ? Math.max(0, Number.isFinite(requestedDelaySeconds) ? requestedDelaySeconds : 45)
+        ? Math.max(0, Number.isFinite(requestedDelaySeconds) ? requestedDelaySeconds : 5)
         : 0;
     const detectedUrl = getPublicBaseUrl();
     const noUsablePublicBaseUrl = !hasUsablePublicBaseUrl();
     const requestedContentType = String(config.contentType || "reel").toLowerCase();
+
+    // Reset status at start
+    config.lastRunStatus = "searching";
+    config.lastRunMessage = "Searching Reddit for fresh anime candidates...";
+    config.lastRunAt = new Date();
+    await config.save();
+
 
     console.log(`[AUTO ANIME] Starting fetch cycle - Detected URL: ${detectedUrl}, Usable: ${!noUsablePublicBaseUrl}, Mode: ${requestedContentType}, Trigger: ${trigger}`);
 
@@ -961,25 +973,48 @@ export async function runAutoAnimeNow(options = {}) {
     let candidate = null;
     let preparedMediaUrl = "";
 
-    console.log(`[AUTO ANIME] Searching for candidates (contentType: ${candidateConfig.contentType}, subreddits: ${candidateConfig.subreddits?.join(", ")})`);
+    console.log(`[AUTO ANIME] 📂 Fetching all candidates from Reddit...`);
+    const allCandidates = await getRedditAnimeCandidates(candidateConfig);
+    const recentSourceIds = new Set(config.recentSourceIds || []);
+    
+    if (!allCandidates.length) {
+      console.log(`[AUTO ANIME] ❌ No candidates found on Reddit.`);
+    }
 
-    for (let i = 0; i < 8; i += 1) {
-      console.log(`[AUTO ANIME] Fetch attempt ${i + 1}/8...`);
-      candidate = await findAvailableCandidate(candidateConfig, attemptedCandidates);
-      if (!candidate) {
-        console.log(`[AUTO ANIME] ❌ No candidate found at attempt ${i + 1}/8`);
-        break;
+    for (const candidateItem of allCandidates) {
+      const candidateKey = `${candidateItem.sourceId}:${candidateItem.postType || "reel"}`;
+      if (attemptedCandidates.has(candidateKey) || recentSourceIds.has(candidateKey)) {
+        continue;
       }
 
-      console.log(`[AUTO ANIME] ✓ Candidate found: ${candidate.sourceId} (${candidate.postType || "reel"})`);
+      // Quick DB check for existence
+      const exists = await Post.exists({ sourceId: candidateItem.sourceId, postType: candidateItem.postType || "reel" });
+      if (exists) {
+        attemptedCandidates.add(candidateKey);
+        continue;
+      }
+
+      candidate = candidateItem;
+      console.log(`[AUTO ANIME] ✓ Candidate selected: ${candidate.sourceId} (${candidate.postType || "reel"})`);
+
+      config.lastRunStatus = "preparing";
+      config.lastRunMessage = `Found: ${candidate.title}. Preparing media...`;
+      await config.save();
+
+      // Start AI Smart Caption generation in background (parallel)
+      const aiCaptionPromise = (async () => {
+        try {
+          return await generateSmartCaption(candidate.mediaUrl, candidate.title, candidate.postType || "reel");
+        } catch (err) {
+          console.log(`[AUTO ANIME] ⚠️ AI Captioning BG failed: ${err.message}`);
+          return null;
+        }
+      })();
 
       if (candidate.postType === "post") {
         console.log(`[AUTO ANIME] 🖼️  Preparing image...`);
         preparedMediaUrl = await cacheAutoImageCandidate(candidate);
-
-        // For image posts, audio is not required. If caching fails, use direct image URL when reachable.
         if (!preparedMediaUrl && (await isMediaUrlReachable(candidate.mediaUrl))) {
-          console.log(`[AUTO ANIME] ✓ Fallback to direct image URL`);
           preparedMediaUrl = candidate.mediaUrl;
         }
       } else {
@@ -989,36 +1024,124 @@ export async function runAutoAnimeNow(options = {}) {
 
       if (preparedMediaUrl) {
         console.log(`[AUTO ANIME] ✅ Media ready: ${preparedMediaUrl}`);
-        break;
+        
+        // Wait for AI caption to finish (or it might be already done)
+        console.log(`[AUTO ANIME] 📝 Waiting for AI analysis...`);
+        const aiResult = await aiCaptionPromise;
+        
+        const rotating = pickRotatingHashtagSet(config);
+        const rotatingKeywords = pickRotatingKeywordSet(config);
+        let finalCaption = renderCaption(config.captionTemplate, candidate, rotating.text, rotatingKeywords.text);
+
+        if (aiResult?.caption) {
+          console.log(`[AUTO ANIME] ✨ AI Smart Caption applied.`);
+          finalCaption = `${aiResult.caption}\n\n${aiResult.hashtags || rotating.text}`;
+        }
+
+        const post = await Post.create({
+          mediaUrl: preparedMediaUrl,
+          caption: finalCaption,
+          postType: candidate.postType || "reel",
+          scheduledTime: new Date(Date.now() + queueDelaySeconds * 1000),
+          status: "pending",
+          sourcePlatform: candidate.sourcePlatform,
+          sourceId: candidate.sourceId,
+          sourceUrl: candidate.sourceUrl
+        });
+
+        console.log(`[AUTO ANIME] ✅ Post created: ${post._id}`);
+        
+        config.lastRunStatus = "success";
+        config.lastRunMessage = `Success: Post #${post._id} created in queue.`;
+        await config.save();
+
+        await appendRecentSourceId(config, candidateKey);
+        config.hashtagSets = rotating.sets;
+        config.hashtagSetCursor = rotating.nextCursor;
+        config.keywordSets = rotatingKeywords.sets;
+        config.keywordSetCursor = rotatingKeywords.nextCursor;
+        if (config.continuousSearchEnabled && (candidate.postType || "reel") === "reel") {
+          config.continuousSearchEnabled = false;
+          config.continuousSearchRequestedAt = null;
+        }
+        config.continuousSearchLastAttemptAt = new Date();
+        await config.save();
+
+        return {
+          queued: true,
+          postId: post._id,
+          postType: candidate.postType || "reel",
+          sourceUrl: candidate.sourceUrl,
+          subreddit: candidate.subreddit,
+          title: candidate.title
+        };
       }
 
-      console.log(`[AUTO ANIME] ⚠️  Media preparation failed, trying next candidate...`);
-      attemptedCandidates.add(`${candidate.sourceId}:${candidate.postType || "reel"}`);
+      console.log(`[AUTO ANIME] ⚠️  Preparation failed for ${candidate.sourceId}, trying next...`);
+      attemptedCandidates.add(candidateKey);
       candidate = null;
     }
 
     if (!candidate) {
-      console.log(`[AUTO ANIME] 🔄 No fresh candidates found, checking recent history...`);
+      console.log(`[AUTO ANIME] 🔄 No fresh candidates found, checking history (fallback)...`);
       candidate = await findCandidateFromRecentHistory(candidateConfig, attemptedCandidates);
       if (candidate) {
         console.log(`[AUTO ANIME] ✓ Found from history: ${candidate.sourceId} (${candidate.postType || "reel"})`);
-        if (candidate.postType === "post") {
-          console.log(`[AUTO ANIME] 🖼️  Preparing image from history...`);
-          preparedMediaUrl = await cacheAutoImageCandidate(candidate);
+        
+        // Parallel AI analysis for history post
+        const aiCaptionPromise = (async () => {
+          try {
+            return await generateSmartCaption(candidate.mediaUrl, candidate.title, candidate.postType || "reel");
+          } catch (err) {
+            return null;
+          }
+        })();
 
+        if (candidate.postType === "post") {
+          preparedMediaUrl = await cacheAutoImageCandidate(candidate);
           if (!preparedMediaUrl && (await isMediaUrlReachable(candidate.mediaUrl))) {
-            console.log(`[AUTO ANIME] ✓ Fallback to direct image URL`);
             preparedMediaUrl = candidate.mediaUrl;
           }
         } else {
-          console.log(`[AUTO ANIME] 🎬 Preparing reel with audio from history...`);
           preparedMediaUrl = await prepareReelWithAudio(candidate);
+        }
+
+        if (preparedMediaUrl) {
+          const aiResult = await aiCaptionPromise;
+          const rotating = pickRotatingHashtagSet(config);
+          const rotatingKeywords = pickRotatingKeywordSet(config);
+          let finalCaption = renderCaption(config.captionTemplate, candidate, rotating.text, rotatingKeywords.text);
+          if (aiResult?.caption) {
+            finalCaption = `${aiResult.caption}\n\n${aiResult.hashtags || rotating.text}`;
+          }
+
+          const post = await Post.create({
+            mediaUrl: preparedMediaUrl,
+            caption: finalCaption,
+            postType: candidate.postType || "reel",
+            scheduledTime: new Date(Date.now() + queueDelaySeconds * 1000),
+            status: "pending",
+            sourcePlatform: candidate.sourcePlatform,
+            sourceId: candidate.sourceId,
+            sourceUrl: candidate.sourceUrl
+          });
+
+          config.lastRunStatus = "success";
+          config.lastRunMessage = `Success: Post from history #${post._id} created.`;
+          await config.save();
+          return { queued: true, postId: post._id, postType: candidate.postType || "reel" };
         }
       }
 
       if (!candidate || !preparedMediaUrl) {
         console.log(`[AUTO ANIME] ❌ No usable candidate (fresh or history)`);
+        
+        config.lastRunStatus = "failed";
+        config.lastRunMessage = "No usable anime media found on Reddit at this moment.";
+        await config.save();
+
         if (forcePostModeForLocal) {
+
           console.log(`[AUTO ANIME] → Force local post mode enabled, need PUBLIC_BASE_URL for reels`);
           return {
             queued: false,
@@ -1069,6 +1192,9 @@ export async function runAutoAnimeNow(options = {}) {
     }
 
     console.log(`[AUTO ANIME] 📝 Content analysis & caption generation...`);
+    config.lastRunMessage = "Analyzing content with AI Gemini...";
+    await config.save();
+
     const rotating = pickRotatingHashtagSet(config);
     const rotatingKeywords = pickRotatingKeywordSet(config);
     
@@ -1098,6 +1224,11 @@ export async function runAutoAnimeNow(options = {}) {
     });
 
     console.log(`[AUTO ANIME] ✅ Post created: ${post._id} (status: pending)`);
+
+    config.lastRunStatus = "success";
+    config.lastRunMessage = `Success: Post #${post._id} created in queue.`;
+    await config.save();
+
     await appendRecentSourceId(config, `${candidate.sourceId}:${candidate.postType || "reel"}`);
     config.hashtagSets = rotating.sets;
     config.hashtagSetCursor = rotating.nextCursor;
@@ -1121,6 +1252,17 @@ export async function runAutoAnimeNow(options = {}) {
   } catch (error) {
     console.error(`[AUTO ANIME] ❌ CRITICAL ERROR in runAutoAnimeNow:`, error?.message || error);
     console.error(`[AUTO ANIME] Full error details:`, error);
+    
+    // Save failure to config so user can see it in UI
+    try {
+      const failConfig = await ensureConfig();
+      failConfig.lastRunStatus = "failed";
+      failConfig.lastRunMessage = `Error: ${error?.message || "Internal processing error"}`;
+      await failConfig.save();
+    } catch (saveErr) {
+      console.error("[AUTO ANIME] Could not save failure status to config:", saveErr.message);
+    }
+
     return {
       queued: false,
       message: `Auto anime failed: ${error?.message || "Unknown error occurred"}. Check server logs.`,

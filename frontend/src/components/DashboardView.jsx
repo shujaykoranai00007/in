@@ -249,6 +249,32 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
 
   const activityFeedPreview = useMemo(() => activityFeed.slice(0, 8), [activityFeed]);
 
+  // Status Polling for Background Tasks (Run Now)
+  useEffect(() => {
+    let timer;
+    if (autoAnimeRunning) {
+      timer = setInterval(async () => {
+        try {
+          const { data } = await api.get("/auto-anime/config");
+          const config = data.config;
+          if (config) {
+            setAutoAnimeConfig(config);
+            if (config.lastRunStatus === "success" || config.lastRunStatus === "failed") {
+              setAutoAnimeRunning(false);
+              if (config.lastRunStatus === "success") {
+                loadPosts({ silent: true });
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Polling error:", err);
+        }
+      }, 5000);
+    }
+    return () => clearInterval(timer);
+  }, [autoAnimeRunning]);
+
+
   const liveProgressPosts = useMemo(() => {
     const working = pendingPosts
       .filter((post) => ["pending", "processing"].includes(String(post.status || "").toLowerCase()))
@@ -503,7 +529,6 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
       setAutoAnimeSaving(false);
     }
   }
-
   async function runAutoAnimeNow() {
     setAutoAnimeRunning(true);
     setAutoAnimeMessage("");
@@ -512,22 +537,19 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
         contentType: autoAnimeConfig?.contentType || "both"
       });
       if (data.queued) {
-        setAutoAnimeMessage(data.message || "Search & Generation started in background. Please wait 1-2 minutes.");
+        setAutoAnimeMessage(data.message || "Search & Generation started in background...");
         
         addActivityEvent({
           tone: "info",
           title: "Background Search Started",
-          description: "System is searching Reddit and generating media. This may take 60-90 seconds."
+          description: "System is searching Reddit and generating media. Tracking progress..."
         });
-
-        // Set a small timer to reload posts in 45 seconds, just in case
-        setTimeout(() => loadPosts({ silent: true }), 45000);
       } else {
-        setAutoAnimeMessage(data.message || "No matching anime content was found this time.");
+        setAutoAnimeMessage(data.message || "No content found.");
+        setAutoAnimeRunning(false);
       }
     } catch (error) {
-      setAutoAnimeMessage(error?.response?.data?.message || "Failed to run anime automation now.");
-    } finally {
+      setAutoAnimeMessage(error?.response?.data?.message || "Failed to start.");
       setAutoAnimeRunning(false);
     }
   }
@@ -1199,16 +1221,22 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                       </AnimatePresence>
                       {(autoAnimeActivating || autoAnimeRunning) && (
                         <motion.div 
-                          animate={{ opacity: [0.3, 1, 0.3] }}
-                          transition={{ duration: 1, repeat: Infinity }}
-                          className="status-line mt-2 font-bold text-sky-400"
+                          animate={{ opacity: [0.6, 1, 0.6] }}
+                          transition={{ duration: 1.5, repeat: Infinity }}
+                          className="status-line mt-2 font-bold text-cyan-400"
                         >
-                          Background Task: Fetching candidates from Reddit & Analyzing with AI...
+                          {autoAnimeConfig?.lastRunMessage || "Initializing background pipeline..."}
                         </motion.div>
                       )}
-                      {!autoAnimeActivating && !autoAnimeRunning && activityFeedPreview.length === 0 && (
-                        <div className="status-line opacity-40 italic">Waiting for pipeline activity...</div>
+                      {autoAnimeConfig?.lastRunStatus === "failed" && !autoAnimeRunning && (
+                        <div className="status-line mt-2 font-bold text-rose-500">
+                          Error: {autoAnimeConfig?.lastRunMessage}
+                        </div>
                       )}
+                      {!autoAnimeActivating && !autoAnimeRunning && activityFeedPreview.length === 0 && (
+                        <div className="status-line opacity-40 italic">System Idle. Waiting for trigger...</div>
+                      )}
+
                     </div>
                   </div>
 

@@ -43,5 +43,12 @@ export const env = {
   instagramUserId: clean(process.env.INSTAGRAM_USER_ID),
   adminEmail: clean(process.env.ADMIN_EMAIL),
   adminPassword: clean(process.env.ADMIN_PASSWORD),
-  frontendOrigin: clean(process.env.FRONTEND_ORIGIN, "http://localhost:5173")
+  frontendOrigin: clean(process.env.FRONTEND_ORIGIN, "http://localhost:5173"),
+  publicBaseUrl: clean(process.env.PUBLIC_BASE_URL),
+  geminiApiKey: clean(process.env.GEMINI_API_KEY),
+  uploadRetryGapSeconds: Number(process.env.UPLOAD_RETRY_GAP_SECONDS) || 60,
+  googleClientId: clean(process.env.GOOGLE_CLIENT_ID),
+  googleClientSecret: clean(process.env.GOOGLE_CLIENT_SECRET),
+  googleRefreshToken: clean(process.env.GOOGLE_REFRESH_TOKEN),
+  googleDriveFolderId: clean(process.env.GOOGLE_DRIVE_FOLDER_ID)
 };

@@ -52,22 +52,27 @@ autoAnimeRouter.post("/run-now", async (_req, res, next) => {
     }
 
     // Run fetch, download, FFMPEG merge, and upload completely in background
-    runAutoAnimeNow({ queueDelaySeconds: 0 })
+    console.log("[API] 🎯 Triggering manual Auto Anime run-now...");
+    
+    runAutoAnimeNow({ queueDelaySeconds: 0, trigger: "manual" })
       .then((result) => {
         if (result?.queued && result.postId) {
+          console.log(`[API] ✅ Auto Anime successful: ${result.postId}. Starting instant upload...`);
           processPostNow(
             result.postId,
             getInstantProcessOptions(result.postType)
-          ).catch((err) => console.error("Background auto upload error:", err));
+          ).catch((err) => console.error("[API] ❌ Background auto upload error:", err.message));
+        } else if (!result?.queued) {
+          console.log(`[API] ⚠️ Auto Anime did not queue: ${result?.message || "No reason"}`);
         }
       })
       .catch((err) => {
-        console.error("runAutoAnimeNow BG failed:", err);
+        console.error("[API] ❌ runAutoAnimeNow fatal error:", err.message);
       });
 
     return res.json({
       queued: true,
-      message: "Search & Media generation started in background. Please wait 1-2 minutes and check Queue/History."
+      message: "Search & Media generation started in background. Please wait 60 - 90 seconds and check Queue/History."
     });
   } catch (error) {
     return next(error);

@@ -119,6 +119,19 @@ const autoAnimeConfigSchema = new mongoose.Schema(
     continuousSearchLastAttemptAt: {
       type: Date,
       default: null
+    },
+    lastRunStatus: {
+      type: String,
+      enum: ["idle", "searching", "preparing", "success", "failed"],
+      default: "idle"
+    },
+    lastRunMessage: {
+      type: String,
+      default: ""
+    },
+    lastRunAt: {
+      type: Date,
+      default: null
     }
   },
   { timestamps: true }
