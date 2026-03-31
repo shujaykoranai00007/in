@@ -187,8 +187,14 @@ async function downloadToFile(url, outputPath) {
   await new Promise((resolve, reject) => {
     const out = fs.createWriteStream(outputPath);
     response.data.pipe(out);
-    out.on("finish", resolve);
-    out.on("error", reject);
+    out.on("finish", () => {
+      out.close();
+      resolve();
+    });
+    out.on("error", (err) => {
+      out.close();
+      reject(err);
+    });
   });
 }
 
@@ -196,9 +202,9 @@ async function muxVideoWithAudio(videoPath, audioPath, outputPath) {
   if (!ffmpegPath) throw new Error("ffmpeg binary not available");
   await new Promise((resolve, reject) => {
     const ff = spawn(ffmpegPath, [
-      "-y", "-threads", "2", "-i", videoPath, "-i", audioPath,
+      "-y", "-threads", "1", "-i", videoPath, "-i", audioPath,
       "-map", "0:v:0", "-map", "1:a:0", "-c:v", "libx264", "-preset", "ultrafast",
-      "-crf", "32", "-maxrate", "1500k", "-bufsize", "2000k", "-tune", "fastdecode", "-max_muxing_queue_size", "128",
+      "-crf", "32", "-maxrate", "1500k", "-bufsize", "1000k", "-tune", "fastdecode", "-max_muxing_queue_size", "128",
       "-profile:v", "main", "-level:v", "4.0", "-pix_fmt", "yuv420p",
       "-vf", "scale=540:960:force_original_aspect_ratio=decrease,pad=540:960:(ow-iw)/2:(oh-ih)/2,fps=30,format=yuv420p",
       "-r", "30", "-g", "60", "-c:a", "aac", "-b:a", "64k", "-ar", "44100", "-ac", "2",
@@ -207,7 +213,14 @@ async function muxVideoWithAudio(videoPath, audioPath, outputPath) {
     let stderr = "";
     ff.stderr.on("data", (chunk) => { stderr += String(chunk || ""); });
     ff.on("error", reject);
-    ff.on("close", (code) => { if (code === 0) resolve(); else reject(new Error(stderr || `ffmpeg failed with code ${code}`)); });
+    ff.on("close", (code) => { 
+      if (code === 0) {
+        if (global.gc) global.gc();
+        resolve(); 
+      } else {
+        reject(new Error(stderr || `ffmpeg failed with code ${code}`)); 
+      }
+    });
   });
 }
 
@@ -369,6 +382,7 @@ export async function runAutoAnimeNow(options = {}) {
           console.warn(`[AUTO ANIME] Mirror failed, using local URL: ${err.message}`);
           return localMediaUrl;
         });
+        if (global.gc) global.gc();
         break;
       }
     }

@@ -5,8 +5,8 @@
   "type": "module",
   "main": "src/server.js",
   "scripts": {
-    "dev": "nodemon src/server.js",
-    "start": "node --max-old-space-size=350 src/server.js"
+    "dev": "nodemon --max-old-space-size=350 --expose-gc src/server.js",
+    "start": "node --max-old-space-size=350 --expose-gc src/server.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

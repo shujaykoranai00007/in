@@ -373,7 +373,7 @@ async function transcodeToInstagramReel(inputPath, outputPath) {
   const args = [
     "-y",
     "-threads",
-    "2",
+    "1",
     "-i",
     inputPath
   ];
@@ -417,7 +417,7 @@ async function transcodeToInstagramReel(inputPath, outputPath) {
     "-maxrate",
     "1500k",
     "-bufsize",
-    "2000k",
+    "1000k",
     "-c:a",
     "aac",
     "-b:a",
@@ -445,6 +445,7 @@ async function transcodeToInstagramReel(inputPath, outputPath) {
     ffmpeg.on("error", reject);
     ffmpeg.on("close", (code) => {
       if (code === 0) {
+        if (global.gc) global.gc();
         resolve();
         return;
       }
