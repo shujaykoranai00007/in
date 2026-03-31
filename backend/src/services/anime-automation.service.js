@@ -613,40 +613,41 @@ async function prepareReelWithAudio(candidate) {
     // For hosted Render backend, upload to Google Drive instead of using ephemeral /uploads
     // Public base URL check ensures we upload for persistent hosts, not local/frontend-only
     if (isHostedRender) {
-      if (!env.googleClientId || !env.googleRefreshToken) {
-        console.log(`[AUTO ANIME] ☁️ Google Drive missing. Using public mirror (Catbox/0x0.st) for Render persistence...`);
+      console.log(`[AUTO ANIME] ☁️ Render detected: Ensuring persistent media URL for Instagram...`);
+      
+      // Try Google Drive if configured
+      if (env.googleClientId && env.googleRefreshToken) {
         try {
-          const mirroredUrl = await uploadToCatbox(outputPath);
-          console.log(`[AUTO ANIME] ✅ Public mirror ready: ${mirroredUrl}`);
-          return mirroredUrl;
-        } catch (mirrorErr) {
-          console.warn(`[AUTO ANIME] ⚠️ Catbox mirror failed, trying 0x0.st:`, mirrorErr.message);
-          try {
-            const mirroredUrl = await uploadTo0x0St(outputPath);
-            console.log(`[AUTO ANIME] ✅ Public mirror (0x0.st) ready: ${mirroredUrl}`);
-            return mirroredUrl;
-          } catch (altMirrorErr) {
-            console.warn(`[AUTO ANIME] ⚠️ All mirrors failed. Falling back to local...`);
-            return `${getPublicBaseUrl()}/media/${outputName}`;
-          }
+          console.log(`[AUTO ANIME] 📤 Uploading reel to Google Drive...`);
+          const driveResult = await uploadToGoogleDrive(outputPath, outputName, "reel");
+          console.log(`[AUTO ANIME] ✅ Google Drive absolute path ready: ${driveResult.mediaUrl}`);
+          return driveResult.mediaUrl;
+        } catch (driveErr) {
+          console.warn(`[AUTO ANIME] ⚠️ Google Drive failed, trying public mirrors...`, driveErr.message);
         }
       }
 
+      // Fallback to Public Mirrors (Resilient Chain)
       try {
-        console.log(`[AUTO ANIME] 📤 Uploading reel to Google Drive for persistent storage...`);
-        const driveResult = await uploadToGoogleDrive(outputPath, outputName, "reel");
-        console.log(`[AUTO ANIME] ✅ Google Drive upload complete: ${driveResult.fileId}`);
-        return driveResult.mediaUrl;
-      } catch (driveError) {
-        // Fallback to public mirrors if Drive upload fails
-        console.warn(`[AUTO ANIME] ⚠️  Google Drive upload failed, trying public mirror:`, driveError?.message || driveError);
+        console.log(`[AUTO ANIME] 📤 Mirroring to Catbox...`);
+        const mirroredUrl = await uploadToCatbox(outputPath);
+        console.log(`[AUTO ANIME] ✅ Catbox mirror ready: ${mirroredUrl}`);
+        return mirroredUrl;
+      } catch (mirrorErr) {
+        console.warn(`[AUTO ANIME] ⚠️ Catbox failed, trying 0x0.st...`, mirrorErr.message);
         try {
-           return await uploadToCatbox(outputPath);
-        } catch (mirrorErr) {
-           return `${getPublicBaseUrl()}/media/${outputName}`;
+          const mirroredUrl = await uploadTo0x0St(outputPath);
+          console.log(`[AUTO ANIME] ✅ 0x0.st mirror ready: ${mirroredUrl}`);
+          return mirroredUrl;
+        } catch (altMirrorErr) {
+          console.error(`[AUTO ANIME] ❌ All persistent mirrors FAILED on Render.`);
+          throw new Error(`Reel persistence failed on Render: Could not mirror media to any public host.`);
         }
       }
     }
+    // For localhost/development, serve from local /uploads directory
+    const mediaUrl = `${getPublicBaseUrl()}/media/${outputName}`;
+    return mediaUrl;
 
     // For localhost/development, serve from local /uploads directory
     const mediaUrl = `${getPublicBaseUrl()}/media/${outputName}`;

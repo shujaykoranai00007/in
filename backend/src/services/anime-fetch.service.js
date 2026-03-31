@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const REDDIT_TIMEOUT_MS = 15000;
-const REDDIT_LIMIT = 60;
+const REDDIT_LIMIT = 100;
 const REDDIT_BASE_URLS = [
   "https://www.reddit.com",
   "https://api.reddit.com",
@@ -124,10 +124,12 @@ function extractReelCandidate(post, config) {
   const score = Number(post.score || 0);
 
   if (!isRandomMode(config) && width < Math.max(480, config.minWidth - 240)) {
+    console.log(`[REDDIT REEL] ⏩ Skipping "${(post.title || "Untitled").substring(0, 30)}..." - Width ${width} < ${Math.max(480, config.minWidth - 240)}`);
     return null;
   }
 
   if (!isRandomMode(config) && score < Math.max(0, config.minScore - 15)) {
+    console.log(`[REDDIT REEL] ⏩ Skipping "${(post.title || "Untitled").substring(0, 30)}..." - Score ${score} < ${Math.max(0, config.minScore - 15)}`);
     return null;
   }
 
@@ -135,10 +137,12 @@ function extractReelCandidate(post, config) {
   const ageHours = (Date.now() - createdUtcMs) / (1000 * 60 * 60);
 
   if (!isRandomMode(config) && ageHours > config.maxAgeHours) {
+    console.log(`[REDDIT REEL] ⏩ Skipping "${(post.title || "Untitled").substring(0, 30)}..." - Age ${ageHours.toFixed(1)}h > ${config.maxAgeHours}h`);
     return null;
   }
 
   if (!isRandomMode(config) && !matchesKeywords(post, config.keywords)) {
+    console.log(`[REDDIT REEL] ⏩ Skipping "${(post.title || "Untitled").substring(0, 30)}..." - No keywords match`);
     return null;
   }
 
@@ -330,8 +334,14 @@ export async function getRedditAnimeCandidates(config) {
   });
 
   console.log(`[REDDIT CANDIDATES] ✅ Final result: ${sorted.length} unique candidates (deduped from ${results.length})`);
+  if (sorted.length === 0 && !isRandomMode(config)) {
+    console.warn(`[REDDIT CANDIDATES] 🔦 Initial search returned 0 results. Running EMERGENCY FALLBACK pass (ignoring all filters)...`);
+    const fallbackResults = await getRedditAnimeCandidates({ ...config, randomMode: true });
+    return fallbackResults;
+  }
+
   if (sorted.length === 0) {
-    console.warn(`[REDDIT CANDIDATES] ⚠️  WARNING: No candidates found! Check Reddit connectivity or subreddit settings.`);
+    console.warn(`[REDDIT CANDIDATES] ⚠️  WARNING: Even fallback found 0 candidates! Check Reddit connectivity.`);
   }
 
   if (!isRandomMode(config)) {
