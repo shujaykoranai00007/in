@@ -27,7 +27,7 @@ const postSchema = new mongoose.Schema(
     },
     sourcePlatform: {
       type: String,
-      enum: ["manual", "reddit"],
+      enum: ["manual", "reddit", "instagram"],
       default: "manual"
     },
     sourceId: {

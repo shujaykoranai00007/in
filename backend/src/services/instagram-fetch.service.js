@@ -96,45 +96,44 @@ export async function getInstagramReelCandidates(config) {
   const accounts = (config.instagramAccounts || []).length ? config.instagramAccounts : ["anime_edits", "amv_community", "anime_vibes"];
   const results = [];
 
-  console.log(`[IG CANDIDATES] 📂 Parallel checking Instagram accounts...`);
+  console.log(`[IG CANDIDATES] 📂 Sequential checking Instagram accounts...`);
 
-  const discoveryPromises = accounts.map(async (account) => {
-    const shortcodes = await discoverAccountReels(account);
-    const accountResults = [];
+  for (const account of accounts) {
+    try {
+      const shortcodes = await discoverAccountReels(account);
 
-    for (const shortcode of shortcodes) {
-      try {
-        // Try embed page first (most open)
-        let extracted = await extractFromEmbedPage(shortcode);
+      for (const shortcode of shortcodes) {
+        try {
+          // Try embed page first (most open)
+          let extracted = await extractFromEmbedPage(shortcode);
 
-        // Fallback to direct page if embed fails (or for meta-data)
-        if (!extracted) {
-          const res = await axios.get(`https://www.instagram.com/reel/${shortcode}/`, { headers: BROWSER_HEADERS, timeout: 10000 });
-          extracted = extractFromMetaTags(res.data);
+          // Fallback to direct page if embed fails (or for meta-data)
+          if (!extracted) {
+            const res = await axios.get(`https://www.instagram.com/reel/${shortcode}/`, { headers: BROWSER_HEADERS, timeout: 10000 });
+            extracted = extractFromMetaTags(res.data);
+          }
+
+          if (extracted && extracted.mediaUrl) {
+            results.push({
+              sourceId: shortcode,
+              sourceUrl: `https://www.instagram.com/reel/${shortcode}/`,
+              sourcePlatform: "instagram",
+              postType: extracted.isVideo ? "reel" : "post",
+              mediaUrl: extracted.mediaUrl,
+              title: extracted.caption || `Anime reel from @${account}`,
+              subreddit: `@${account}`, // Use handle for reporting
+              score: 100, // Instagram doesn't give us public score easily, so assume good
+              width: 720 // Reels are standard 720+
+            });
+          }
+        } catch (err) {
+          // Skip individual failure
         }
-
-        if (extracted && extracted.mediaUrl) {
-          accountResults.push({
-            sourceId: shortcode,
-            sourceUrl: `https://www.instagram.com/reel/${shortcode}/`,
-            sourcePlatform: "instagram",
-            postType: extracted.isVideo ? "reel" : "post",
-            mediaUrl: extracted.mediaUrl,
-            title: extracted.caption || `Anime reel from @${account}`,
-            subreddit: `@${account}`, // Use handle for reporting
-            score: 100, // Instagram doesn't give us public score easily, so assume good
-            width: 720 // Reels are standard 720+
-          });
-        }
-      } catch (err) {
-        // Skip individual failure
       }
+    } catch (err) {
+      console.error(`[IG CANDIDATES] ❌ Failed for account @${account}:`, err.message);
     }
-    return accountResults;
-  });
-
-  const allResults = await Promise.all(discoveryPromises);
-  results.push(...allResults.flat());
+  }
 
   console.log(`[IG CANDIDATES] ✅ Final results: ${results.length} unique candidates extracted.`);
   return results;

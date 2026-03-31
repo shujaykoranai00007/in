@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const REDDIT_TIMEOUT_MS = 15000;
-const REDDIT_LIMIT = 100;
+const REDDIT_LIMIT = 50;
 const REDDIT_BASE_URLS = [
   "https://www.reddit.com",
   "https://api.reddit.com",
@@ -262,9 +262,9 @@ export async function getRedditAnimeCandidates(config) {
   const subreddits = config.subreddits.length ? config.subreddits : ["Animeedits", "AnimeMusicVideos", "anime_edits", "anime", "AnimeMeme", "animememes"];
   const results = [];
 
-  console.log(`[REDDIT CANDIDATES] 📂 Parallel fetching across ${subreddits.length} subreddits...`);
+  console.log(`[REDDIT CANDIDATES] 📂 Sequential fetching across ${subreddits.length} subreddits...`);
   
-  const subredditPromises = subreddits.map(async (subreddit) => {
+  for (const subreddit of subreddits) {
     try {
       const [hotPosts, topPosts] = await Promise.all([
         fetchSubredditFeed(subreddit, "hot"),
@@ -272,7 +272,6 @@ export async function getRedditAnimeCandidates(config) {
       ]);
 
       const merged = [...hotPosts, ...topPosts];
-      const subredditResults = [];
 
       for (const post of merged) {
         if (post.stickied || post.over_18 || post.is_gallery) {
@@ -281,26 +280,23 @@ export async function getRedditAnimeCandidates(config) {
 
         if (isAllowedType(config, "reel")) {
           const reelCandidate = extractReelCandidate(post, config);
-          if (reelCandidate) subredditResults.push(reelCandidate);
+          if (reelCandidate) results.push(reelCandidate);
         }
 
         if (isAllowedType(config, "post")) {
           const imageCandidate = extractImageCandidate(post, config);
-          if (imageCandidate) subredditResults.push(imageCandidate);
+          if (imageCandidate) results.push(imageCandidate);
         }
       }
 
-      console.log(`[REDDIT CANDIDATES] ✓ /r/${subreddit}: Extracted ${subredditResults.length} candidates`);
-      return subredditResults;
+      console.log(`[REDDIT CANDIDATES] ✓ /r/${subreddit}: Extracted candidates. Current total: ${results.length}`);
     } catch (error) {
       const statusCode = error.response?.status || "UNK";
       console.error(`[REDDIT CANDIDATES] ❌ /r/${subreddit} [HTTP ${statusCode}]: ${error.message}`);
-      return [];
     }
-  });
+  }
 
-  const allSubredditResults = await Promise.all(subredditPromises);
-  results.push(...allSubredditResults.flat());
+  // Deduplication logic below...
 
   if (results.length === 0) {
     console.log(`[REDDIT CANDIDATES] 🔦 No results from subreddits. Trying global search fallback...`);

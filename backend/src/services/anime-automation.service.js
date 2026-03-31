@@ -196,7 +196,7 @@ async function muxVideoWithAudio(videoPath, audioPath, outputPath) {
   if (!ffmpegPath) throw new Error("ffmpeg binary not available");
   await new Promise((resolve, reject) => {
     const ff = spawn(ffmpegPath, [
-      "-y", "-i", videoPath, "-i", audioPath, "-map", "0:v:0", "-map", "1:a:0", "-c:v", "libx264", "-preset", "ultrafast", "-profile:v", "main", "-level:v", "4.0", "-pix_fmt", "yuv420p",
+      "-y", "-threads", "1", "-i", videoPath, "-i", audioPath, "-map", "0:v:0", "-map", "1:a:0", "-c:v", "libx264", "-preset", "ultrafast", "-profile:v", "main", "-level:v", "4.0", "-pix_fmt", "yuv420p",
       "-vf", "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2,fps=30,format=yuv420p", "-r", "30", "-g", "60", "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2", "-movflags", "+faststart", "-t", String(AUTO_REEL_MAX_SECONDS), "-shortest", outputPath
     ]);
     let stderr = "";
