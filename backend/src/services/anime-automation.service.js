@@ -16,6 +16,7 @@ import { uploadToCatbox, uploadTo0x0St } from "./instagram.service.js";
 const SLOT_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const DEFAULT_SLOTS = ["09:00", "12:30", "18:00"];
 const MAX_RECENT_SOURCE_IDS = 300;
+const isHostedRender = !!process.env.RENDER_EXTERNAL_URL;
 const STOP_WORDS = new Set([
   "the",
   "and",

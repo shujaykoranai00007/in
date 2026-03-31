@@ -159,9 +159,15 @@ function isInstagramMediaTypeError(error) {
 function buildInstagramServiceError(error, fallbackMessage) {
   const apiError = error?.response?.data?.error || null;
   const instagramCode = Number(apiError?.code || 0);
-  const message = String(apiError?.message || error?.message || fallbackMessage || "Instagram API error").trim();
+  const userTitle = apiError?.error_user_title || "";
+  const userMsg = apiError?.error_user_msg || "";
+  
+  let message = String(apiError?.message || error?.message || fallbackMessage || "Instagram API error").trim();
+  if (userTitle || userMsg) {
+    message = `${userTitle}${userTitle && userMsg ? ": " : ""}${userMsg} (${message})`;
+  }
 
-  const wrapped = new Error(message || fallbackMessage || "Instagram API error");
+  const wrapped = new Error(message);
   if (instagramCode > 0) {
     wrapped.instagramErrorCode = instagramCode;
     wrapped.code = `INSTAGRAM_${instagramCode}`;

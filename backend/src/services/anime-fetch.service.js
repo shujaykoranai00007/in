@@ -123,11 +123,11 @@ function extractReelCandidate(post, config) {
   const width = Number(redditVideo.width || source?.preview?.images?.[0]?.source?.width || 0);
   const score = Number(post.score || 0);
 
-  if (!isRandomMode(config) && width < config.minWidth) {
+  if (!isRandomMode(config) && width < Math.max(480, config.minWidth - 240)) {
     return null;
   }
 
-  if (!isRandomMode(config) && score < config.minScore) {
+  if (!isRandomMode(config) && score < Math.max(0, config.minScore - 15)) {
     return null;
   }
 
@@ -183,11 +183,11 @@ function extractImageCandidate(post, config) {
   const width = previewWidth || 1080;
   const score = Number(post.score || 0);
 
-  if (!isRandomMode(config) && width < config.minWidth) {
+  if (!isRandomMode(config) && width < Math.max(480, config.minWidth - 240)) {
     return null;
   }
 
-  if (!isRandomMode(config) && score < config.minScore) {
+  if (!isRandomMode(config) && score < Math.max(0, config.minScore - 15)) {
     return null;
   }
 
@@ -250,7 +250,7 @@ async function fetchRedditSearch(query, sort = "hot") {
 
 
 export async function getRedditAnimeCandidates(config) {
-  const subreddits = config.subreddits.length ? config.subreddits : ["AnimeEdit"];
+  const subreddits = config.subreddits.length ? config.subreddits : ["Animeedits", "AnimeMusicVideos", "anime_edits", "anime", "AnimeMeme", "animememes"];
   const results = [];
 
   console.log(`[REDDIT CANDIDATES] Starting search across ${subreddits.length} subreddits: ${subreddits.join(", ")}`);
