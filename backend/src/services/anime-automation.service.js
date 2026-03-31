@@ -196,7 +196,7 @@ async function muxVideoWithAudio(videoPath, audioPath, outputPath) {
   if (!ffmpegPath) throw new Error("ffmpeg binary not available");
   await new Promise((resolve, reject) => {
     const ff = spawn(ffmpegPath, [
-      "-y", "-threads", "1", "-i", videoPath, "-i", audioPath,
+      "-y", "-threads", "2", "-i", videoPath, "-i", audioPath,
       "-map", "0:v:0", "-map", "1:a:0", "-c:v", "libx264", "-preset", "ultrafast",
       "-crf", "28", "-maxrate", "2000k", "-bufsize", "2000k", "-max_muxing_queue_size", "128",
       "-profile:v", "main", "-level:v", "4.0", "-pix_fmt", "yuv420p",
@@ -249,10 +249,13 @@ async function prepareReelWithAudio(candidate) {
   const outputPath = path.resolve(uploadsDir, outputName);
 
   try {
-    await downloadToFile(candidate.mediaUrl, tempVideo);
-    await downloadToFile(audioUrl, tempAudio);
+    console.log(`[AUTO ANIME] 📥 Starting parallel downloads for ${safeId}...`);
+    await Promise.all([
+      downloadToFile(candidate.mediaUrl, tempVideo),
+      downloadToFile(audioUrl, tempAudio)
+    ]);
     
-    console.log(`[AUTO ANIME] 🎬 Muxing video and audio...`);
+    console.log(`[AUTO ANIME] 🎬 Muxing video and audio with 2 threads...`);
     await muxVideoWithAudio(tempVideo, tempAudio, outputPath);
     
     // Verify file exists
