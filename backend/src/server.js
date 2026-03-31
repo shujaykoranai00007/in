@@ -3,6 +3,10 @@ import { env } from "./config/env.js";
 import { connectDatabase } from "./config/db.js";
 import { startScheduler } from "./scheduler/cron.js";
 import mongoose from "mongoose";
+import sharp from "sharp";
+
+// Disable sharp cache to save RAM on 512MB tier
+sharp.cache(false);
 
 async function bootstrap() {
   await connectDatabase();

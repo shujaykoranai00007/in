@@ -290,6 +290,11 @@ export async function getRedditAnimeCandidates(config) {
       }
 
       console.log(`[REDDIT CANDIDATES] ✓ /r/${subreddit}: Extracted candidates. Current total: ${results.length}`);
+      
+      // Explicitly clean up large JSON sources to save RAM before next subreddit
+      merged = null; 
+      hotPosts = null; 
+      topPosts = null;
     } catch (error) {
       const statusCode = error.response?.status || "UNK";
       console.error(`[REDDIT CANDIDATES] ❌ /r/${subreddit} [HTTP ${statusCode}]: ${error.message}`);
