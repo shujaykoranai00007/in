@@ -384,8 +384,10 @@ export async function runAutoAnimeNow(options = {}) {
       config.lastRunMessage = "Searching Instagram accounts..."; await config.save();
       candidates = await getInstagramReelCandidates(config);
     } else {
-      config.lastRunMessage = "Searching Reddit subreddits..."; await config.save();
-      candidates = await getRedditAnimeCandidates(config);
+      candidates = await getRedditAnimeCandidates(config, async (msg) => {
+        config.lastRunMessage = msg;
+        await config.save();
+      });
     }
 
     if (!candidates.length) {

@@ -15,8 +15,9 @@ function createRedditClient(baseURL) {
     timeout: REDDIT_TIMEOUT_MS,
     headers: {
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      Accept: "application/json",
-      Referer: "https://www.reddit.com/"
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Referer": "https://www.reddit.com/"
     }
   });
 }
@@ -258,13 +259,17 @@ async function fetchRedditSearch(query, sort = "hot") {
 
 
 
-export async function getRedditAnimeCandidates(config) {
-  const subreddits = config.subreddits.length ? config.subreddits : ["Animeedits", "AnimeMusicVideos", "anime_edits", "anime", "AnimeMeme", "animememes"];
+export async function getRedditAnimeCandidates(config, onProgress) {
+  const subreddits = (config.subreddits || []).length ? [...config.subreddits] : ["Animeedits", "AnimeMusicVideos", "anime_edits", "anime", "AnimeMeme", "animememes"];
   const results = [];
 
-  console.log(`[REDDIT CANDIDATES] 📂 Sequential fetching across ${subreddits.length} subreddits...`);
+  // Shuffle subreddits for better variety and fault tolerance
+  const subs = subreddits.sort(() => Math.random() - 0.5);
+
+  console.log(`[REDDIT CANDIDATES] 📂 Sequential fetching across ${subs.length} subreddits...`);
   
-  for (const subreddit of subreddits) {
+  for (const subreddit of subs) {
+    if (onProgress) await onProgress(`Searching /r/${subreddit}...`);
     try {
       const [hotPosts, topPosts] = await Promise.all([
         fetchSubredditFeed(subreddit, "hot"),
