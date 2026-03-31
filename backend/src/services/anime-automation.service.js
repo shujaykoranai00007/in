@@ -961,8 +961,16 @@ export async function updateAutoAnimeConfig(payload) {
 }
 
 export async function runAutoAnimeNow(options = {}) {
+  const config = await ensureConfig();
+  
+  // IMMEDIATELY update status so UI doesn't hang on "Initializing..."
+  console.log("[AUTO ANIME] 🚀 Initializing run-now...");
+  config.lastRunStatus = "searching";
+  config.lastRunMessage = "Starting background anime search...";
+  config.lastRunAt = new Date();
+  await config.save();
+
   try {
-    const config = await ensureConfig();
     const trigger = options?.trigger === "scheduler" ? "scheduler" : "manual";
     const requestedDelaySeconds = Number(options?.queueDelaySeconds);
     const queueDelaySeconds =
@@ -971,13 +979,9 @@ export async function runAutoAnimeNow(options = {}) {
         : 0;
     const detectedUrl = getPublicBaseUrl();
     const noUsablePublicBaseUrl = !hasUsablePublicBaseUrl();
-    const requestedContentType = String(config.contentType || "reel").toLowerCase();
+    const requestedContentType = String(config.contentType || options?.contentType || "reel").toLowerCase();
 
-    // Reset status at start
-    config.lastRunStatus = "searching";
-    config.lastRunMessage = "Searching Reddit for fresh anime candidates...";
-    config.lastRunAt = new Date();
-    await config.save();
+    console.log(`[AUTO ANIME] Cycle details - Base: ${detectedUrl}, Mode: ${requestedContentType}, Trigger: ${trigger}`);
 
 
     console.log(`[AUTO ANIME] Starting fetch cycle - Detected URL: ${detectedUrl}, Usable: ${!noUsablePublicBaseUrl}, Mode: ${requestedContentType}, Trigger: ${trigger}`);
@@ -995,6 +999,11 @@ export async function runAutoAnimeNow(options = {}) {
     let preparedMediaUrl = "";
 
     console.log(`[AUTO ANIME] 📂 Fetching all candidates from Reddit...`);
+    const subredditsToSearch = (config.subreddits.length ? config.subreddits : FALLBACK_SUBREDDITS).slice(0, 3);
+    
+    config.lastRunMessage = `Searching Reddit across /r/${subredditsToSearch.join(", /r/")}...`;
+    await config.save();
+
     const allCandidates = await getRedditAnimeCandidates(candidateConfig);
     const recentSourceIds = new Set(config.recentSourceIds || []);
     
