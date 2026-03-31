@@ -9,34 +9,13 @@ import { Post } from "../models/Post.js";
 import { fileURLToPath } from "url";
 import { getRedditAnimeCandidates } from "./anime-fetch.service.js";
 import { getInstagramReelCandidates } from "./instagram-fetch.service.js";
-import { uploadFile as uploadToGoogleDrive } from "./google-drive.service.js";
-import { generateSmartCaption } from "./ai.service.js";
-import { env } from "../config/env.js";
 import { uploadToCatbox, uploadTo0x0St } from "./instagram.service.js";
 
 const SLOT_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const DEFAULT_SLOTS = ["09:00", "12:30", "18:00"];
 const MAX_RECENT_SOURCE_IDS = 300;
-const isHostedRender = !!process.env.RENDER_EXTERNAL_URL;
 const STOP_WORDS = new Set([
-  "the",
-  "and",
-  "with",
-  "edit",
-  "anime",
-  "amv",
-  "mmv",
-  "gmv",
-  "reel",
-  "video",
-  "short",
-  "shorts",
-  "official",
-  "best",
-  "new",
-  "hd",
-  "4k",
-  "1080p"
+  "the", "and", "with", "edit", "anime", "amv", "mmv", "gmv", "reel", "video", "short", "shorts", "official", "best", "new", "hd", "4k", "1080p"
 ]);
 const MAX_CAPTION_LENGTH = 2200;
 const AUTO_REEL_MAX_SECONDS = 40;
@@ -51,6 +30,7 @@ const DEFAULT_KEYWORD_SETS = [
   "anime moments, best anime scene, fan edit, anime community, viral anime edit",
   "cinematic anime edit, emotional anime clip, anime lovers, anime shorts, anime aesthetic"
 ];
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const uploadsDir = path.resolve(__dirname, "../../uploads");
@@ -59,38 +39,22 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
+/** HELPER FUNCTIONS **/
+
 function uniqueSortedSlots(slots = []) {
-  return [...new Set(slots)]
-    .filter((slot) => SLOT_PATTERN.test(slot))
-    .sort();
+  return [...new Set(slots)].filter((slot) => SLOT_PATTERN.test(slot)).sort();
 }
 
 function normalizeList(raw) {
-  if (Array.isArray(raw)) {
-    return raw;
-  }
-
-  if (typeof raw === "string") {
-    return raw
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
-
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "string") return raw.split(",").map((item) => item.trim()).filter(Boolean);
   return [];
 }
 
 function formatDateParts(date, timezone) {
   const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false
+    timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false
   });
-
   const parts = formatter.formatToParts(date);
   const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return {
@@ -100,54 +64,27 @@ function formatDateParts(date, timezone) {
 }
 
 function cleanTitle(value) {
-  return String(value || "")
-    .replace(/\[[^\]]*\]/g, " ")
-    .replace(/\([^\)]*\)/g, " ")
-    .replace(/[|_]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return String(value || "").replace(/\[[^\]]*\]/g, " ").replace(/\([^\)]*\)/g, " ").replace(/[|_]/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function toHashtagToken(value) {
-  return String(value || "")
-    .replace(/[^a-zA-Z0-9 ]/g, " ")
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((piece) => piece[0].toUpperCase() + piece.slice(1).toLowerCase())
-    .join("");
+  return String(value || "").replace(/[^a-zA-Z0-9 ]/g, " ").split(/\s+/).filter(Boolean).map((piece) => piece[0].toUpperCase() + piece.slice(1).toLowerCase()).join("");
 }
 
 function extractTopicTokens(title) {
-  const words = cleanTitle(title)
-    .toLowerCase()
-    .split(/\s+/)
-    .map((word) => word.replace(/[^a-z0-9]/g, ""))
-    .filter((word) => word.length >= 3 && !STOP_WORDS.has(word));
-
+  const words = cleanTitle(title).toLowerCase().split(/\s+/).map((word) => word.replace(/[^a-z0-9]/g, "")).filter((word) => word.length >= 3 && !STOP_WORDS.has(word));
   return [...new Set(words)].slice(0, 4);
 }
 
 function buildDynamicKeywordString(candidate) {
-  const tokens = extractTopicTokens(candidate.title)
-    .map((token) => token.replace(/[^a-z0-9]/g, " ").trim())
-    .filter(Boolean)
-    .slice(0, 5);
-
-  if (!tokens.length) {
-    return "anime edit, anime reels, amv edit";
-  }
-
-  return tokens
-    .map((token) => (token.includes("anime") ? token : `anime ${token}`))
-    .join(", ");
+  const tokens = extractTopicTokens(candidate.title).map((token) => token.replace(/[^a-z0-9]/g, " ").trim()).filter(Boolean).slice(0, 5);
+  if (!tokens.length) return "anime edit, anime reels, amv edit";
+  return tokens.map((token) => (token.includes("anime") ? token : `anime ${token}`)).join(", ");
 }
 
 function inferAnimeLabel(title) {
   const cleaned = cleanTitle(title);
-  if (!cleaned) {
-    return "This anime";
-  }
-
+  if (!cleaned) return "This anime";
   const parts = cleaned.split(/[-:]/).map((part) => part.trim()).filter(Boolean);
   const primary = parts[0] || cleaned;
   const words = primary.split(/\s+/).slice(0, 4);
@@ -159,245 +96,94 @@ function buildSmartCaption(candidate) {
   const title = cleanTitle(candidate.title) || "Anime edit";
   const animeLabel = inferAnimeLabel(title);
   const tokens = extractTopicTokens(title);
-
-  const nicheTags = tokens
-    .map((token) => `#${toHashtagToken(token)}`)
-    .filter((tag) => tag.length > 2)
-    .slice(0, 4);
-
-  const coreTags = candidate.postType === "post"
-    ? ["#AnimeEdit", "#AnimePost", "#AnimeLovers", "#OtakuCommunity", "#ExplorePage", "#SaveAndShare"]
-    : ["#AnimeEdit", "#AnimeReels", "#AMV", "#EditCommunity", "#ReelsInstagram", "#ExplorePage"];
-
+  const nicheTags = tokens.map((token) => `#${toHashtagToken(token)}`).filter((tag) => tag.length > 2).slice(0, 4);
+  const coreTags = candidate.postType === "post" ? ["#AnimeEdit", "#AnimePost", "#AnimeLovers", "#OtakuCommunity", "#ExplorePage"] : ["#AnimeEdit", "#AnimeReels", "#AMV", "#EditCommunity", "#ExplorePage"];
   const uniqueTags = [...new Set([...nicheTags, ...coreTags])].slice(0, 10);
-
   const contentLabel = candidate.postType === "post" ? "post" : "reel";
-  const lines = [
-    `${animeLabel} energy in one ${contentLabel}.`,
-    `Rate this edit from 1-10 and comment your favorite scene.`,
-    `Save and share with an anime friend for more daily drops.`,
-    "",
-    uniqueTags.join(" ")
-  ];
-
-  return lines.join("\n").slice(0, MAX_CAPTION_LENGTH);
+  return [`${animeLabel} energy in one ${contentLabel}.`, `Rate this edit from 1-10 and comment your favorite scene.`, `Save and share with an anime friend for more daily drops.`, "", uniqueTags.join(" ")].join("\n").slice(0, MAX_CAPTION_LENGTH);
 }
 
 function sanitizeHashtagSets(rawSets = []) {
-  const normalized = normalizeList(rawSets)
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, 12);
-
+  const normalized = normalizeList(rawSets).map((item) => item.trim()).filter(Boolean).slice(0, 12);
   return normalized.length ? normalized : DEFAULT_HASHTAG_SETS;
 }
 
 function sanitizeKeywordSets(rawSets = []) {
-  const normalized = normalizeList(rawSets)
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, 12);
-
+  const normalized = normalizeList(rawSets).map((item) => item.trim()).filter(Boolean).slice(0, 12);
   return normalized.length ? normalized : DEFAULT_KEYWORD_SETS;
 }
 
 function pickRotatingHashtagSet(config) {
   const sets = sanitizeHashtagSets(config.hashtagSets);
-  const cursor = Number(config.hashtagSetCursor || 0);
-  const index = cursor >= 0 ? cursor % sets.length : 0;
-  return {
-    text: sets[index],
-    nextCursor: (index + 1) % sets.length,
-    sets
-  };
+  const index = Number(config.hashtagSetCursor || 0) % sets.length;
+  return { text: sets[index], nextCursor: (index + 1) % sets.length, sets };
 }
 
 function pickRotatingKeywordSet(config) {
   const sets = sanitizeKeywordSets(config.keywordSets);
-  const cursor = Number(config.keywordSetCursor || 0);
-  const index = cursor >= 0 ? cursor % sets.length : 0;
-  return {
-    text: sets[index],
-    nextCursor: (index + 1) % sets.length,
-    sets
-  };
+  const index = Number(config.keywordSetCursor || 0) % sets.length;
+  return { text: sets[index], nextCursor: (index + 1) % sets.length, sets };
 }
 
 function renderCaption(template, candidate, rotatingHashtagText = "", rotatingKeywordText = "") {
   const safeTemplate = (template || "").trim();
   const smartCaption = buildSmartCaption(candidate);
   const dynamicKeywords = buildDynamicKeywordString(candidate);
-  const mergedKeywords = [rotatingKeywordText, dynamicKeywords]
-    .filter(Boolean)
-    .join(", ");
+  const mergedKeywords = [rotatingKeywordText, dynamicKeywords].filter(Boolean).join(", ");
   const keywordLine = mergedKeywords ? `Keywords: ${mergedKeywords}` : "";
 
   if (!safeTemplate) {
-    if (!rotatingHashtagText) {
-      return keywordLine ? `${smartCaption}\n${keywordLine}`.slice(0, MAX_CAPTION_LENGTH) : smartCaption;
-    }
-
+    if (!rotatingHashtagText) return keywordLine ? `${smartCaption}\n${keywordLine}` : smartCaption;
     const lines = smartCaption.split("\n");
     lines[lines.length - 1] = rotatingHashtagText;
     const withTags = lines.join("\n");
-    return keywordLine ? `${withTags}\n${keywordLine}`.slice(0, MAX_CAPTION_LENGTH) : withTags;
+    return keywordLine ? `${withTags}\n${keywordLine}` : withTags;
   }
 
-  const custom = safeTemplate
-    .replaceAll("{{title}}", candidate.title)
-    .replaceAll("{{anime}}", inferAnimeLabel(candidate.title))
-    .replaceAll("{{subreddit}}", candidate.subreddit)
-    .replaceAll("{{sourceUrl}}", candidate.sourceUrl);
-
-  // Keep custom templates but append optimized tags if user forgot hashtags.
+  const custom = safeTemplate.replaceAll("{{title}}", candidate.title).replaceAll("{{anime}}", inferAnimeLabel(candidate.title)).replaceAll("{{subreddit}}", candidate.subreddit).replaceAll("{{sourceUrl}}", candidate.sourceUrl);
   if (!/#\w+/.test(custom)) {
     const fallbackTags = rotatingHashtagText || smartCaption.split("\n").at(-1);
     const withTags = `${custom}\n\n${fallbackTags}`;
-    return keywordLine ? `${withTags}\n${keywordLine}`.slice(0, MAX_CAPTION_LENGTH) : withTags.slice(0, MAX_CAPTION_LENGTH);
+    return (keywordLine ? `${withTags}\n${keywordLine}` : withTags).slice(0, MAX_CAPTION_LENGTH);
   }
-
-  return keywordLine ? `${custom}\n${keywordLine}`.slice(0, MAX_CAPTION_LENGTH) : custom.slice(0, MAX_CAPTION_LENGTH);
+  return (keywordLine ? `${custom}\n${keywordLine}` : custom).slice(0, MAX_CAPTION_LENGTH);
 }
+
+/** MEDIA UTILS **/
 
 function getPublicBaseUrl() {
   const candidates = [process.env.RENDER_EXTERNAL_URL, process.env.PUBLIC_BASE_URL];
-
-  for (const candidate of candidates) {
-    const value = String(candidate || "").trim();
-    if (!value) {
-      continue;
-    }
-
+  for (const c of candidates) {
+    const value = String(c || "").trim();
+    if (!value) continue;
     try {
       const parsed = new URL(value);
-      if (!["http:", "https:"].includes(parsed.protocol)) {
-        continue;
-      }
-
-      return parsed.origin;
-    } catch {
-      // Try next candidate.
-    }
+      if (["http:", "https:"].includes(parsed.protocol)) return parsed.origin;
+    } catch {}
   }
-
   return `http://localhost:${process.env.PORT || 5000}`;
 }
 
 function hasUsablePublicBaseUrl() {
   const value = getPublicBaseUrl();
-  if (!value || value.includes("localhost")) {
-    return false;
-  }
-
+  if (!value || value.includes("localhost")) return false;
   try {
-    const parsed = new URL(value);
-    const host = parsed.hostname.toLowerCase();
-
-    if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".local")) {
-      return false;
-    }
-
-
-    if (host.startsWith("10.") || host.startsWith("192.168.")) {
-      return false;
-    }
-
-    if (host.startsWith("172.")) {
-      const secondOctet = Number(host.split(".")[1]);
-      if (secondOctet >= 16 && secondOctet <= 31) {
-        return false;
-      }
-    }
-
-    // Frontend-only hosts typically do not expose backend media files.
-    if (host.endsWith(".vercel.app") || host.endsWith(".netlify.app")) {
-      return false;
-    }
-
-    return ["http:", "https:"].includes(parsed.protocol);
-  } catch {
-    return false;
-  }
+    const host = new URL(value).hostname.toLowerCase();
+    if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".local")) return false;
+    if (host.endsWith(".vercel.app") || host.endsWith(".netlify.app")) return false;
+    return true;
+  } catch { return false; }
 }
 
 async function isMediaUrlReachable(url) {
   try {
-    const response = await axios.head(url, {
-      timeout: 12000,
-      maxRedirects: 5,
-      headers: {
-        "User-Agent": "InstaFlowScheduler/1.0"
-      }
-    });
-
+    const response = await axios.head(url, { timeout: 12000, maxRedirects: 5, headers: { "User-Agent": "InstaFlowScheduler/1.0" } });
     return response.status >= 200 && response.status < 400;
-  } catch {
-    return false;
-  }
-}
-
-function inferImageExtension(contentType, mediaUrl) {
-  const normalizedType = String(contentType || "").toLowerCase();
-  if (normalizedType.includes("jpeg") || normalizedType.includes("jpg")) {
-    return "jpg";
-  }
-
-  if (normalizedType.includes("png")) {
-    return "png";
-  }
-
-  const pathname = (() => {
-    try {
-      return new URL(mediaUrl).pathname.toLowerCase();
-    } catch {
-      return "";
-    }
-  })();
-
-  if (pathname.endsWith(".png")) {
-    return "png";
-  }
-
-  return "jpg";
-}
-
-function resolveUrl(baseUrl, childUrl) {
-  try {
-    return new URL(childUrl, baseUrl).toString();
-  } catch {
-    return "";
-  }
-}
-
-function deriveDashUrlFromReelUrl(mediaUrl) {
-  try {
-    const parsed = new URL(mediaUrl);
-    if (parsed.hostname.toLowerCase() !== "v.redd.it") {
-      return "";
-    }
-
-    const segments = parsed.pathname.split("/").filter(Boolean);
-    if (!segments.length) {
-      return "";
-    }
-
-    const clipId = segments[0];
-    return `${parsed.protocol}//${parsed.host}/${clipId}/DASHPlaylist.mpd`;
-  } catch {
-    return "";
-  }
+  } catch { return false; }
 }
 
 async function downloadToFile(url, outputPath) {
-  const response = await axios.get(url, {
-    responseType: "stream",
-    timeout: 45000,
-    maxContentLength: 250 * 1024 * 1024,
-    headers: {
-      "User-Agent": "InstaFlowScheduler/1.0"
-    }
-  });
-
+  const response = await axios.get(url, { responseType: "stream", timeout: 45000, maxContentLength: 250 * 1024 * 1024, headers: { "User-Agent": "InstaFlowScheduler/1.0" } });
   await new Promise((resolve, reject) => {
     const out = fs.createWriteStream(outputPath);
     response.data.pipe(out);
@@ -406,192 +192,49 @@ async function downloadToFile(url, outputPath) {
   });
 }
 
-async function pickDashAudioUrl(dashUrl) {
-  if (!dashUrl) {
-    return "";
-  }
-
-  try {
-    const { data } = await axios.get(dashUrl, {
-      timeout: 15000,
-      responseType: "text",
-      headers: {
-        "User-Agent": "InstaFlowScheduler/1.0"
-      }
-    });
-
-    const xml = String(data || "");
-    const allAudioUrls = [];
-    const adaptationBlocks = [...xml.matchAll(/<AdaptationSet[\s\S]*?<\/AdaptationSet>/gi)];
-
-    for (const blockMatch of adaptationBlocks) {
-      const block = blockMatch[0] || "";
-      const isAudioSet =
-        /mimeType="audio\//i.test(block) ||
-        /contentType="audio"/i.test(block) ||
-        /audioSamplingRate=/i.test(block) ||
-        /codecs="[^"]*mp4a/i.test(block);
-
-      if (!isAudioSet) {
-        continue;
-      }
-
-      const baseUrlMatches = [...block.matchAll(/<BaseURL>([^<]+)<\/BaseURL>/gi)];
-      for (const item of baseUrlMatches) {
-        const candidate = resolveUrl(dashUrl, String(item[1] || "").trim());
-        if (candidate) {
-          allAudioUrls.push(candidate);
-        }
-      }
-
-      const representationBlocks = [...block.matchAll(/<Representation[\s\S]*?<\/Representation>/gi)];
-      for (const repMatch of representationBlocks) {
-        const rep = repMatch[0] || "";
-        const repAudio = /audioSamplingRate=/i.test(rep) || /codecs="[^"]*mp4a/i.test(rep);
-        if (!repAudio) {
-          continue;
-        }
-
-        const repUrlMatches = [...rep.matchAll(/<BaseURL>([^<]+)<\/BaseURL>/gi)];
-        for (const item of repUrlMatches) {
-          const candidate = resolveUrl(dashUrl, String(item[1] || "").trim());
-          if (candidate) {
-            allAudioUrls.push(candidate);
-          }
-        }
-      }
-    }
-
-    // Final fallback for uncommon manifests where audio URLs are obvious in the file path.
-    if (!allAudioUrls.length) {
-      const globalUrlMatches = [...xml.matchAll(/<BaseURL>([^<]+)<\/BaseURL>/gi)];
-      for (const item of globalUrlMatches) {
-        const raw = String(item[1] || "").trim();
-        if (!/(audio|AUDIO_|\.m4a|\.mp4)/i.test(raw)) {
-          continue;
-        }
-
-        if (/(video|CMAF_|DASH_\d+\.mp4)/i.test(raw)) {
-          continue;
-        }
-
-        const candidate = resolveUrl(dashUrl, raw);
-        if (candidate) {
-          allAudioUrls.push(candidate);
-        }
-      }
-    }
-
-    if (!allAudioUrls.length) {
-      return "";
-    }
-
-    const deduped = [...new Set(allAudioUrls)];
-    const sorted = deduped.sort((a, b) => {
-      const aScore = Number((a.match(/AUDIO_(\d+)/i) || [0, 0])[1]);
-      const bScore = Number((b.match(/AUDIO_(\d+)/i) || [0, 0])[1]);
-      return bScore - aScore;
-    });
-
-    return sorted[0];
-  } catch {
-    return "";
-  }
-}
-
 async function muxVideoWithAudio(videoPath, audioPath, outputPath) {
-  if (!ffmpegPath) {
-    throw new Error("ffmpeg binary not available");
-  }
-
+  if (!ffmpegPath) throw new Error("ffmpeg binary not available");
   await new Promise((resolve, reject) => {
     const ff = spawn(ffmpegPath, [
-      "-y",
-      "-i",
-      videoPath,
-      "-i",
-      audioPath,
-      "-map",
-      "0:v:0",
-      "-map",
-      "1:a:0",
-      "-c:v",
-      "libx264",
-      "-preset",
-      "ultrafast",
-      "-profile:v",
-      "main",
-      "-level:v",
-      "4.0",
-      "-pix_fmt",
-      "yuv420p",
-      "-vf",
-      "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2,fps=30,format=yuv420p",
-      "-r",
-      "30",
-      "-g",
-      "60",
-      "-keyint_min",
-      "60",
-      "-sc_threshold",
-      "0",
-      "-b:v",
-      "2500k",
-      "-maxrate",
-      "2500k",
-      "-bufsize",
-      "5000k",
-      "-c:a",
-      "aac",
-      "-b:a",
-      "128k",
-      "-ar",
-      "44100",
-      "-ac",
-      "2",
-      "-threads",
-      "0",
-      "-movflags",
-      "+faststart",
-      "-max_muxing_queue_size",
-      "1024",
-      "-t",
-      String(AUTO_REEL_MAX_SECONDS),
-      "-shortest",
-      outputPath
+      "-y", "-i", videoPath, "-i", audioPath, "-map", "0:v:0", "-map", "1:a:0", "-c:v", "libx264", "-preset", "ultrafast", "-profile:v", "main", "-level:v", "4.0", "-pix_fmt", "yuv420p",
+      "-vf", "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2,fps=30,format=yuv420p", "-r", "30", "-g", "60", "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2", "-movflags", "+faststart", "-t", String(AUTO_REEL_MAX_SECONDS), "-shortest", outputPath
     ]);
-
     let stderr = "";
-    ff.stderr.on("data", (chunk) => {
-      stderr += String(chunk || "");
-    });
-
+    ff.stderr.on("data", (chunk) => { stderr += String(chunk || ""); });
     ff.on("error", reject);
-    ff.on("close", (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-
-      reject(new Error(stderr || `ffmpeg failed with code ${code}`));
-    });
+    ff.on("close", (code) => { if (code === 0) resolve(); else reject(new Error(stderr || `ffmpeg failed with code ${code}`)); });
   });
 }
 
+function deriveDashUrlFromReelUrl(mediaUrl) {
+  try {
+    const parsed = new URL(mediaUrl);
+    if (parsed.hostname.toLowerCase() !== "v.redd.it") return "";
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    if (!segments.length) return "";
+    return `${parsed.protocol}//${parsed.host}/${segments[0]}/DASHPlaylist.mpd`;
+  } catch { return ""; }
+}
+
+async function pickDashAudioUrl(dashUrl) {
+  if (!dashUrl) return "";
+  try {
+    const { data } = await axios.get(dashUrl, { timeout: 15000, responseType: "text", headers: { "User-Agent": "InstaFlowScheduler/1.0" } });
+    const xml = String(data || "");
+    const audioMatches = [...xml.matchAll(/<BaseURL>([^<]+)<\/BaseURL>/gi)]
+      .map(m => new URL(m[1].trim(), dashUrl).toString())
+      .filter(url => /(audio|AUDIO_|\.m4a|\.mp4)/i.test(url) && !/(video|CMAF_|DASH_\d+\.mp4)/i.test(url));
+    return audioMatches.sort((a,b) => b.length - a.length)[0] || "";
+  } catch { return ""; }
+}
+
+/** COMPONENT PREPARATION **/
+
 async function prepareReelWithAudio(candidate) {
-  if (candidate.postType !== "reel") {
-    return candidate.mediaUrl;
-  }
-
-  // We prefer muxed video+audio. Even on localhost, we generate the local file
-  // so that the instagram service can mirror it to a public host (like catbox) before posting.
-
-
+  if (candidate.postType !== "reel") return candidate.mediaUrl;
   const dashUrl = candidate.dashUrl || deriveDashUrlFromReelUrl(candidate.mediaUrl);
   const audioUrl = await pickDashAudioUrl(dashUrl);
-  if (!audioUrl) {
-    return candidate.mediaUrl;
-  }
+  if (!audioUrl) return candidate.mediaUrl;
 
   const safeId = String(candidate.sourceId || Date.now()).replace(/[^a-zA-Z0-9_-]/g, "");
   const ts = Date.now();
@@ -603,761 +246,221 @@ async function prepareReelWithAudio(candidate) {
   try {
     await downloadToFile(candidate.mediaUrl, tempVideo);
     await downloadToFile(audioUrl, tempAudio);
+    
+    console.log(`[AUTO ANIME] 🎬 Muxing video and audio...`);
     await muxVideoWithAudio(tempVideo, tempAudio, outputPath);
     
-    // Verify file was actually created and has content
+    // Verify file exists
     const stats = await fs.promises.stat(outputPath).catch(() => null);
-    if (!stats || stats.size === 0) {
-      throw new Error(`Reel muxing produced empty file (0 bytes)`);
-    }
+    if (!stats || stats.size === 0) throw new Error("Muxing produced empty file");
 
-    // For hosted Render backend, upload to Google Drive instead of using ephemeral /uploads
-    // Public base URL check ensures we upload for persistent hosts, not local/frontend-only
-    if (isHostedRender) {
-      console.log(`[AUTO ANIME] ☁️ Render detected: Ensuring persistent media URL for Instagram...`);
+    const isPublic = hasUsablePublicBaseUrl();
+    
+    // If not public (localhost) OR explicitly on Render, we MUST mirror to a public host for Instagram to see it.
+    if (!isPublic || !!process.env.RENDER_EXTERNAL_URL) {
+      console.log(`[AUTO ANIME] ☁️ Media not public-ready. Mirroring to external host...`);
       
-      // Try Google Drive if configured
-      if (env.googleClientId && env.googleRefreshToken) {
-        try {
-          console.log(`[AUTO ANIME] 📤 Uploading reel to Google Drive...`);
-          const driveResult = await uploadToGoogleDrive(outputPath, outputName, "reel");
-          console.log(`[AUTO ANIME] ✅ Google Drive absolute path ready: ${driveResult.mediaUrl}`);
-          return driveResult.mediaUrl;
-        } catch (driveErr) {
-          console.warn(`[AUTO ANIME] ⚠️ Google Drive failed, trying public mirrors...`, driveErr.message);
-        }
-      }
-
-      // Fallback to Public Mirrors (Resilient Chain)
+      // Public Mirrors (Primary Fallbacks)
       try {
-        console.log(`[AUTO ANIME] 📤 Mirroring to Catbox...`);
         const mirroredUrl = await uploadToCatbox(outputPath);
-        console.log(`[AUTO ANIME] ✅ Catbox mirror ready: ${mirroredUrl}`);
+        console.log(`[AUTO ANIME] ✅ Mirrored to Catbox: ${mirroredUrl}`);
         return mirroredUrl;
-      } catch (mirrorErr) {
-        console.warn(`[AUTO ANIME] ⚠️ Catbox failed, trying 0x0.st...`, mirrorErr.message);
-        try {
+      } catch {
+        try { 
           const mirroredUrl = await uploadTo0x0St(outputPath);
-          console.log(`[AUTO ANIME] ✅ 0x0.st mirror ready: ${mirroredUrl}`);
-          return mirroredUrl;
-        } catch (altMirrorErr) {
-          console.error(`[AUTO ANIME] ❌ All persistent mirrors FAILED on Render.`);
-          throw new Error(`Reel persistence failed on Render: Could not mirror media to any public host.`);
+          console.log(`[AUTO ANIME] ✅ Mirrored to 0x0.st: ${mirroredUrl}`);
+          return mirroredUrl; 
+        }
+        catch { 
+          console.error(`[AUTO ANIME] ❌ All persistent mirrors FAILED.`);
+          throw new Error("Could not mirror media to any public host.");
         }
       }
     }
-    // For localhost/development, serve from local /uploads directory
-    const mediaUrl = `${getPublicBaseUrl()}/media/${outputName}`;
-    return mediaUrl;
-
-    // For localhost/development, serve from local /uploads directory
-    const mediaUrl = `${getPublicBaseUrl()}/media/${outputName}`;
-    return mediaUrl;
+    
+    const localUrl = `${getPublicBaseUrl()}/media/${outputName}`;
+    console.log(`[AUTO ANIME] ✅ Using local public URL: ${localUrl}`);
+    return localUrl;
   } catch (error) {
-    console.error("Failed to prepare reel with audio", error?.message || error);
+    console.warn(`[AUTO ANIME] ⚠️ Reel preparation failed: ${error.message}. Falling back to source URL.`);
     return candidate.mediaUrl;
   } finally {
-    await fs.promises.unlink(tempVideo).catch(() => {});
-    await fs.promises.unlink(tempAudio).catch(() => {});
+    [tempVideo, tempAudio].forEach(p => fs.promises.unlink(p).catch(() => {}));
   }
 }
 
 async function cacheAutoImageCandidate(candidate) {
-  if (candidate.postType !== "post") {
-    return candidate.mediaUrl;
-  }
-
+  if (candidate.postType !== "post") return candidate.mediaUrl;
   try {
-    const response = await axios.get(candidate.mediaUrl, {
-      responseType: "arraybuffer",
-      timeout: 30000,
-      maxContentLength: 20 * 1024 * 1024,
-      headers: {
-        "User-Agent": "InstaFlowScheduler/1.0",
-        Accept: "image/*"
-      }
-    });
-
-    const contentType = String(response.headers?.["content-type"] || "").toLowerCase();
-    if (!contentType.startsWith("image/")) {
-      throw new Error(`Unsupported image content-type: ${contentType || "unknown"}`);
-    }
-
-    // Even if no usable public base URL is configured, we return the localhost URL.
-    // The instagram service has a fallback mirror mechanism that will upload this
-    // local file to a temporary file host so Instagram can access it.
-
-
-    const safeId = String(candidate.sourceId || Date.now()).replace(/[^a-zA-Z0-9_-]/g, "");
-    const filename = `auto-${Date.now()}-${safeId}.jpg`;
+    const res = await axios.get(candidate.mediaUrl, { responseType: "arraybuffer", timeout: 30000, headers: { "User-Agent": "InstaFlowScheduler/1.0" } });
+    const filename = `auto-${Date.now()}-${candidate.sourceId}.jpg`;
     const filePath = path.resolve(uploadsDir, filename);
-    const sourceBuffer = Buffer.from(response.data);
-    await sharp(sourceBuffer).jpeg({ quality: 90 }).toFile(filePath);
-    
-    // Verify file was created and has content
-    const stats = await fs.promises.stat(filePath).catch(() => null);
-    if (!stats || stats.size === 0) {
-      throw new Error(`Image caching produced empty file (0 bytes)`);
-    }
-    
-    const mediaUrl = `${getPublicBaseUrl()}/media/${filename}`;
-    
-    // Accept locally-verified files. Instagram Graph API will validate URL reachability at upload time.
-    // (Remote reachability checks can fail through tunnels/proxies even if Instagram can reach it)
-    return mediaUrl;
-  } catch (error) {
-    console.error("Failed to cache auto image candidate", error?.message || error);
-    return "";
-  }
+    await sharp(Buffer.from(res.data)).jpeg({ quality: 90 }).toFile(filePath);
+    return `${getPublicBaseUrl()}/media/${filename}`;
+  } catch { return candidate.mediaUrl; }
 }
 
-function toPublicConfig(config) {
-  return {
-    enabled: config.enabled,
-    sourcePlatform: config.sourcePlatform,
-    contentType: config.contentType,
-    randomMode: config.randomMode,
-    subreddits: config.subreddits,
-    keywords: config.keywords,
-    minScore: config.minScore,
-    minWidth: config.minWidth,
-    maxAgeHours: config.maxAgeHours,
-    captionTemplate: config.captionTemplate,
-    hashtagSets: config.hashtagSets,
-    keywordSets: config.keywordSets,
-    timeSlots: config.timeSlots,
-    timezone: config.timezone,
-    continuousSearchEnabled: Boolean(config.continuousSearchEnabled),
-    continuousSearchContentType: config.continuousSearchContentType || "reel",
-    continuousSearchRequestedAt: config.continuousSearchRequestedAt || null,
-    continuousSearchLastAttemptAt: config.continuousSearchLastAttemptAt || null,
-    updatedAt: config.updatedAt
-  };
-}
+/** CORE AUTOMATION **/
 
 async function ensureConfig() {
-  const config = await AutoAnimeConfig.findOneAndUpdate(
-    { singletonKey: "default" },
-    { $setOnInsert: { singletonKey: "default" } },
-    { upsert: true, new: true }
-  );
-
-  if (!config.timeSlots?.length) {
-    config.timeSlots = DEFAULT_SLOTS;
-    await config.save();
-  }
-
-  if (!config.hashtagSets?.length) {
-    config.hashtagSets = DEFAULT_HASHTAG_SETS;
-    config.hashtagSetCursor = 0;
-    await config.save();
-  }
-
-  if (!config.keywordSets?.length) {
-    config.keywordSets = DEFAULT_KEYWORD_SETS;
-    config.keywordSetCursor = 0;
-    await config.save();
-  }
-
-  const legacyDefaultSubs = ["AnimeEdit", "AnimeMV", "AMV"];
-  const existingSubs = Array.isArray(config.subreddits) ? [...config.subreddits] : [];
-  const isLegacySubs =
-    existingSubs.length === legacyDefaultSubs.length &&
-    existingSubs.every((sub, idx) => sub === legacyDefaultSubs[idx]);
-
-  if (isLegacySubs) {
-    config.subreddits = FALLBACK_SUBREDDITS;
-    config.contentType = "both";
-    config.keywords = [];
-    await config.save();
-  }
-
+  const config = await AutoAnimeConfig.findOneAndUpdate({ singletonKey: "default" }, { $setOnInsert: { singletonKey: "default" } }, { upsert: true, new: true });
+  if (!config.timeSlots?.length) { config.timeSlots = DEFAULT_SLOTS; await config.save(); }
+  if (!config.hashtagSets?.length) { config.hashtagSets = DEFAULT_HASHTAG_SETS; await config.save(); }
+  if (!config.keywordSets?.length) { config.keywordSets = DEFAULT_KEYWORD_SETS; await config.save(); }
   return config;
 }
 
-async function findAvailableCandidate(config, excludeKeys = new Set()) {
-  const candidates = await getRedditAnimeCandidates(config);
-  const recentSourceIds = new Set(config.recentSourceIds || []);
-
-  for (const candidate of candidates) {
-    if (!candidate.mediaUrl) {
-      continue;
-    }
-
-    const candidateKey = `${candidate.sourceId}:${candidate.postType || "reel"}`;
-    if (excludeKeys.has(candidateKey)) {
-      continue;
-    }
-
-    if (recentSourceIds.has(candidateKey)) {
-      continue;
-    }
-
-    const exists = await Post.exists({
-      sourceId: candidate.sourceId,
-      postType: candidate.postType || "reel"
-    });
-    if (!exists) {
-      return candidate;
-    }
-  }
-
-  const fallbackCandidates = await getRedditAnimeCandidates({
-    ...config,
-    subreddits: FALLBACK_SUBREDDITS,
-    contentType: config.contentType || "both",
-    keywords: [],
-    minScore: Math.max(0, Number(config.minScore || 0) - 15),
-    minWidth: Math.max(480, Number(config.minWidth || 0) - 240),
-    maxAgeHours: Math.min(168, Math.max(Number(config.maxAgeHours || 72), 96))
-  });
-
-  for (const candidate of fallbackCandidates) {
-    if (!candidate.mediaUrl) {
-      continue;
-    }
-
-    const candidateKey = `${candidate.sourceId}:${candidate.postType || "reel"}`;
-    if (excludeKeys.has(candidateKey)) {
-      continue;
-    }
-
-    if (recentSourceIds.has(candidateKey)) {
-      continue;
-    }
-
-    const exists = await Post.exists({
-      sourceId: candidate.sourceId,
-      postType: candidate.postType || "reel"
-    });
-    if (!exists) {
-      return candidate;
-    }
-  }
-
-  return null;
-}
-
-async function findCandidateFromRecentHistory(config, excludeKeys = new Set()) {
-  const preferredTypes =
-    config.contentType === "both"
-      ? ["reel", "post"]
-      : [config.contentType || "reel"];
-
-  const recentPosted = await Post.find({
-    sourcePlatform: "reddit",
-    status: "posted",
-    postType: { $in: preferredTypes }
-  })
-    .sort({ updatedAt: -1 })
-    .limit(40)
-    .lean();
-
-  if (!recentPosted.length) {
-    return null;
-  }
-
-  for (const item of recentPosted) {
-    const key = `${item.sourceId || item._id}:${item.postType || "reel"}`;
-    if (excludeKeys.has(key)) {
-      continue;
-    }
-
-    if (!item.mediaUrl) {
-      continue;
-    }
-
-    return {
-      sourceId: `${item.sourceId || item._id}-replay-${Date.now()}`,
-      sourceUrl: item.sourceUrl || item.mediaUrl,
-      sourcePlatform: "reddit",
-      postType: item.postType || "reel",
-      mediaUrl: item.mediaUrl,
-      dashUrl: (item.postType || "reel") === "reel" ? deriveDashUrlFromReelUrl(item.mediaUrl) : "",
-      title: "Replay anime drop",
-      subreddit: "anime"
-    };
-  }
-
-  return null;
-}
-
-async function appendRecentSourceId(config, sourceId) {
-  const next = [sourceId, ...(config.recentSourceIds || [])].slice(0, MAX_RECENT_SOURCE_IDS);
-  config.recentSourceIds = next;
-}
-
-export async function getAutoAnimeConfig() {
-  const config = await ensureConfig();
-  return toPublicConfig(config);
-}
-
-export async function updateAutoAnimeConfig(payload) {
-  const config = await ensureConfig();
-
-  if (payload.enabled !== undefined) {
-    config.enabled = Boolean(payload.enabled);
-  }
-
-  if (payload.timezone !== undefined) {
-    config.timezone = String(payload.timezone || "").trim() || "Asia/Kolkata";
-  }
-
-  if (payload.contentType !== undefined) {
-    const next = String(payload.contentType || "").trim().toLowerCase();
-    config.contentType = ["reel", "post", "both"].includes(next) ? next : "reel";
-  }
-
-  if (payload.randomMode !== undefined) {
-    config.randomMode = Boolean(payload.randomMode);
-  }
-
-  if (payload.captionTemplate !== undefined) {
-    config.captionTemplate = String(payload.captionTemplate || "").trim();
-  }
-
-  if (payload.subreddits !== undefined) {
-    config.subreddits = normalizeList(payload.subreddits)
-      .map((value) => value.replace(/^r\//i, "").trim())
-      .filter(Boolean)
-      .slice(0, 20);
-  }
-
-  if (payload.keywords !== undefined) {
-    config.keywords = normalizeList(payload.keywords)
-      .map((value) => value.toLowerCase().trim())
-      .filter(Boolean)
-      .slice(0, 20);
-  }
-
-  if (payload.timeSlots !== undefined) {
-    const normalizedSlots = uniqueSortedSlots(normalizeList(payload.timeSlots).map((slot) => slot.trim()));
-    config.timeSlots = normalizedSlots.length ? normalizedSlots : DEFAULT_SLOTS;
-  }
-
-  if (payload.minScore !== undefined) {
-    config.minScore = Math.max(0, Number(payload.minScore) || 0);
-  }
-
-  if (payload.minWidth !== undefined) {
-    config.minWidth = Math.max(240, Number(payload.minWidth) || 240);
-  }
-
-  if (payload.maxAgeHours !== undefined) {
-    const value = Number(payload.maxAgeHours) || 72;
-    config.maxAgeHours = Math.min(720, Math.max(1, value));
-  }
-
-  if (payload.hashtagSets !== undefined) {
-    config.hashtagSets = sanitizeHashtagSets(payload.hashtagSets);
-    config.hashtagSetCursor = 0;
-  }
-
-  if (payload.keywordSets !== undefined) {
-    config.keywordSets = sanitizeKeywordSets(payload.keywordSets);
-    config.keywordSetCursor = 0;
-  }
-
-  await config.save();
-  return toPublicConfig(config);
-}
-
 export async function runAutoAnimeNow(options = {}) {
-  const config = await ensureConfig();
-  
-  // IMMEDIATELY update status so UI doesn't hang on "Initializing..."
-  console.log("[AUTO ANIME] 🚀 Initializing run-now...");
   try {
-    config.lastRunStatus = "searching";
-    config.lastRunMessage = "Starting background anime search...";
-    config.lastRunAt = new Date();
-    await config.save();
-  } catch (initialSaveErr) {
-    console.error("[AUTO ANIME] Warning: Initial status save failed, but continuing run...", initialSaveErr.message);
-  }
-
-  try {
+    const config = await ensureConfig();
     const trigger = options?.trigger === "scheduler" ? "scheduler" : "manual";
-    const requestedDelaySeconds = Number(options?.queueDelaySeconds);
-    const queueDelaySeconds =
-      trigger === "manual"
-        ? Math.max(0, Number.isFinite(requestedDelaySeconds) ? requestedDelaySeconds : 5)
-        : 0;
-    const detectedUrl = getPublicBaseUrl();
-    const noUsablePublicBaseUrl = !hasUsablePublicBaseUrl();
-    const requestedContentType = String(config.contentType || options?.contentType || "reel").toLowerCase();
+    
+    // Update live status for dashboard
+    config.lastRunStatus = "searching";
+    config.lastRunAt = new Date();
+    config.lastRunMessage = trigger === "manual" ? "Manual trigger started..." : "Scheduled run started...";
+    await config.save();
 
-    console.log(`[AUTO ANIME] Cycle details - Base: ${detectedUrl}, Mode: ${requestedContentType}, Trigger: ${trigger}`);
+    let candidates = [];
+    if (config.sourcePlatform === "instagram") {
+      config.lastRunMessage = "Searching Instagram accounts..."; await config.save();
+      candidates = await getInstagramReelCandidates(config);
+    } else {
+      config.lastRunMessage = "Searching Reddit subreddits..."; await config.save();
+      candidates = await getRedditAnimeCandidates(config);
+    }
 
+    if (!candidates.length) {
+      config.lastRunStatus = "failed";
+      config.lastRunMessage = "No candidates found on either platform.";
+      if (trigger === "scheduler") config.continuousSearchEnabled = true;
+      await config.save();
+      return { queued: false, message: config.lastRunMessage };
+    }
 
-    console.log(`[AUTO ANIME] Starting fetch cycle - Detected URL: ${detectedUrl}, Usable: ${!noUsablePublicBaseUrl}, Mode: ${requestedContentType}, Trigger: ${trigger}`);
+    config.lastRunStatus = "preparing";
+    config.lastRunMessage = `Found ${candidates.length} candidates. Preparing best reel...`;
+    await config.save();
 
-    // Keep reel-only mode strict (no image fallback), but still try queueing direct public reel URLs.
-    // PUBLIC_BASE_URL is only mandatory when we need to serve locally generated media files.
-
-    const forcePostModeForLocal =
-      noUsablePublicBaseUrl && requestedContentType === "both";
-    const candidateConfig = forcePostModeForLocal
-      ? { ...config.toObject(), contentType: "post" }
-      : config;
-    const attemptedCandidates = new Set();
-    let candidate = null;
+    const recentSourceIds = new Set(config.recentSourceIds || []);
+    let bestCandidate = null;
     let preparedMediaUrl = "";
 
-    let allCandidates = [];
-    if (config.sourcePlatform === "instagram") {
-      console.log(`[AUTO ANIME] 📸 Starting Instagram extraction mode...`);
-      config.lastRunMessage = "Searching Instagram accounts for reels...";
-      await config.save();
-      allCandidates = await getInstagramReelCandidates(candidateConfig);
-    } else {
-      console.log(`[AUTO ANIME] 🔦 Starting Reddit extraction mode...`);
-      const subredditsToSearch = (config.subreddits.length ? config.subreddits : ["Animeedits", "AnimeMusicVideos", "anime_edits", "anime"]).slice(0, 3);
-      config.lastRunMessage = `Searching Reddit across /r/${subredditsToSearch.join(", /r/")}...`;
-      await config.save();
-      allCandidates = await getRedditAnimeCandidates(candidateConfig);
-    }
-    const recentSourceIds = new Set(config.recentSourceIds || []);
-    
-    if (!allCandidates.length) {
-      console.log(`[AUTO ANIME] ❌ No candidates found on Reddit.`);
-    }
+    for (const candidate of candidates) {
+      const key = `${candidate.sourceId}:${candidate.postType || "reel"}`;
+      if (recentSourceIds.has(key)) continue;
+      if (await Post.exists({ sourceId: candidate.sourceId })) continue;
 
-    for (const candidateItem of allCandidates) {
-      const candidateKey = `${candidateItem.sourceId}:${candidateItem.postType || "reel"}`;
-      if (attemptedCandidates.has(candidateKey) || recentSourceIds.has(candidateKey)) {
-        continue;
-      }
-
-      // Quick DB check for existence
-      const exists = await Post.exists({ sourceId: candidateItem.sourceId, postType: candidateItem.postType || "reel" });
-      if (exists) {
-        attemptedCandidates.add(candidateKey);
-        continue;
-      }
-
-      candidate = candidateItem;
-      console.log(`[AUTO ANIME] ✓ Candidate selected: ${candidate.sourceId} (${candidate.postType || "reel"})`);
-
-      config.lastRunStatus = "preparing";
-      config.lastRunMessage = `Found: ${candidate.title}. Preparing media...`;
-      await config.save();
-
-      // Start AI Smart Caption generation in background (parallel)
-      const aiCaptionPromise = (async () => {
-        try {
-          return await generateSmartCaption(candidate.mediaUrl, candidate.title, candidate.postType || "reel");
-        } catch (err) {
-          console.log(`[AUTO ANIME] ⚠️ AI Captioning BG failed: ${err.message}`);
-          return null;
-        }
-      })();
-
-      if (candidate.postType === "post") {
-        console.log(`[AUTO ANIME] 🖼️  Preparing image...`);
-        preparedMediaUrl = await cacheAutoImageCandidate(candidate);
-        if (!preparedMediaUrl && (await isMediaUrlReachable(candidate.mediaUrl))) {
-          preparedMediaUrl = candidate.mediaUrl;
-        }
-      } else {
-        console.log(`[AUTO ANIME] 🎬 Preparing reel with audio...`);
-        preparedMediaUrl = await prepareReelWithAudio(candidate);
-      }
-
-      if (preparedMediaUrl) {
-        console.log(`[AUTO ANIME] ✅ Media ready: ${preparedMediaUrl}`);
-        
-        // Wait for AI caption to finish (or it might be already done)
-        console.log(`[AUTO ANIME] 📝 Waiting for AI analysis...`);
-        const aiResult = await aiCaptionPromise;
-        
-        const rotating = pickRotatingHashtagSet(config);
-        const rotatingKeywords = pickRotatingKeywordSet(config);
-        let finalCaption = renderCaption(config.captionTemplate, candidate, rotating.text, rotatingKeywords.text);
-
-        if (aiResult?.caption) {
-          console.log(`[AUTO ANIME] ✨ AI Smart Caption applied.`);
-          finalCaption = `${aiResult.caption}\n\n${aiResult.hashtags || rotating.text}`;
-        }
-
-        const post = await Post.create({
-          mediaUrl: preparedMediaUrl,
-          caption: finalCaption,
-          postType: candidate.postType || "reel",
-          scheduledTime: new Date(Date.now() + queueDelaySeconds * 1000),
-          status: "pending",
-          sourcePlatform: candidate.sourcePlatform,
-          sourceId: candidate.sourceId,
-          sourceUrl: candidate.sourceUrl
-        });
-
-        console.log(`[AUTO ANIME] ✅ Post created: ${post._id}`);
-        
-        config.lastRunStatus = "success";
-        config.lastRunMessage = `Success: Post #${post._id} created in queue.`;
-        await config.save();
-
-        await appendRecentSourceId(config, candidateKey);
-        config.hashtagSets = rotating.sets;
-        config.hashtagSetCursor = rotating.nextCursor;
-        config.keywordSets = rotatingKeywords.sets;
-        config.keywordSetCursor = rotatingKeywords.nextCursor;
-        if (config.continuousSearchEnabled && (candidate.postType || "reel") === "reel") {
-          config.continuousSearchEnabled = false;
-          config.continuousSearchRequestedAt = null;
-        }
-        config.continuousSearchLastAttemptAt = new Date();
-        await config.save();
-
-        return {
-          queued: true,
-          postId: post._id,
-          postType: candidate.postType || "reel",
-          sourceUrl: candidate.sourceUrl,
-          subreddit: candidate.subreddit,
-          title: candidate.title
-        };
-      }
-
-      console.log(`[AUTO ANIME] ⚠️  Preparation failed for ${candidate.sourceId}, trying next...`);
-      attemptedCandidates.add(candidateKey);
-      candidate = null;
-    }
-
-    if (!candidate) {
-      console.log(`[AUTO ANIME] 🔄 No fresh candidates found, checking history (fallback)...`);
-      candidate = await findCandidateFromRecentHistory(candidateConfig, attemptedCandidates);
-      if (candidate) {
-        console.log(`[AUTO ANIME] ✓ Found from history: ${candidate.sourceId} (${candidate.postType || "reel"})`);
-        
-        // Parallel AI analysis for history post
-        const aiCaptionPromise = (async () => {
-          try {
-            return await generateSmartCaption(candidate.mediaUrl, candidate.title, candidate.postType || "reel");
-          } catch (err) {
-            return null;
-          }
-        })();
-
-        if (candidate.postType === "post") {
-          preparedMediaUrl = await cacheAutoImageCandidate(candidate);
-          if (!preparedMediaUrl && (await isMediaUrlReachable(candidate.mediaUrl))) {
-            preparedMediaUrl = candidate.mediaUrl;
-          }
-        } else {
-          preparedMediaUrl = await prepareReelWithAudio(candidate);
-        }
-
-        if (preparedMediaUrl) {
-          const aiResult = await aiCaptionPromise;
-          const rotating = pickRotatingHashtagSet(config);
-          const rotatingKeywords = pickRotatingKeywordSet(config);
-          let finalCaption = renderCaption(config.captionTemplate, candidate, rotating.text, rotatingKeywords.text);
-          if (aiResult?.caption) {
-            finalCaption = `${aiResult.caption}\n\n${aiResult.hashtags || rotating.text}`;
-          }
-
-          const post = await Post.create({
-            mediaUrl: preparedMediaUrl,
-            caption: finalCaption,
-            postType: candidate.postType || "reel",
-            scheduledTime: new Date(Date.now() + queueDelaySeconds * 1000),
-            status: "pending",
-            sourcePlatform: candidate.sourcePlatform,
-            sourceId: candidate.sourceId,
-            sourceUrl: candidate.sourceUrl
-          });
-
-          config.lastRunStatus = "success";
-          config.lastRunMessage = `Success: Post from history #${post._id} created.`;
-          await config.save();
-          return { queued: true, postId: post._id, postType: candidate.postType || "reel" };
-        }
-      }
-
-      if (!candidate || !preparedMediaUrl) {
-        console.log(`[AUTO ANIME] ❌ No usable candidate (fresh or history)`);
-        
-        config.lastRunStatus = "failed";
-        config.lastRunMessage = "No usable anime media found on Reddit at this moment.";
-        await config.save();
-
-        if (forcePostModeForLocal) {
-
-          console.log(`[AUTO ANIME] → Force local post mode enabled, need PUBLIC_BASE_URL for reels`);
-          return {
-            queued: false,
-            message:
-              "Local mode detected: reels need a public PUBLIC_BASE_URL. For now, auto mode is trying posts only. Set a public HTTPS URL (ngrok/cloudflared) to enable reels."
-          };
-        }
-
-        if (requestedContentType === "reel") {
-          console.log(`[AUTO ANIME] → Reel mode: enabling continuous search`);
-          if (!config.continuousSearchEnabled) {
-            config.continuousSearchEnabled = true;
-            config.continuousSearchContentType = "reel";
-            config.continuousSearchRequestedAt = new Date();
-          }
-
-          config.continuousSearchLastAttemptAt = new Date();
-          await config.save();
-
-          if (trigger === "manual") {
-            return {
-              queued: false,
-              message:
-                "Abhi reel nahi mili. Continuous search ON ho gaya hai, system har minute reel dhoondhega aur milte hi queue karega."
-            };
-          }
-
-          return {
-            queued: false,
-            message: "Continuous reel search active: still looking for a publishable reel."
-          };
-        }
-
-        console.log(`[AUTO ANIME] → Mixed/image mode: no media available now`);
-        return {
-          queued: false,
-          message: "No publishable anime media found now (Reddit may be rate-limited). Try again in a few minutes."
-        };
-      }
+      bestCandidate = candidate;
+      preparedMediaUrl = await (candidate.postType === "post" ? cacheAutoImageCandidate(candidate) : prepareReelWithAudio(candidate));
+      if (preparedMediaUrl) break;
     }
 
     if (!preparedMediaUrl) {
-      console.log(`[AUTO ANIME] ⚠️  Media prep failed, scheduling instant retry...`);
-      return {
-        queued: false,
-        message: "Could not prepare media for upload. Try again in a minute."
-      };
+      config.lastRunStatus = "failed";
+      config.lastRunMessage = "Failed to prepare any found media.";
+      await config.save();
+      return { queued: false, message: config.lastRunMessage };
     }
 
-    console.log(`[AUTO ANIME] 📝 Content analysis & caption generation...`);
-    config.lastRunMessage = "Analyzing content with AI Gemini...";
-    await config.save();
-
-    const rotating = pickRotatingHashtagSet(config);
+    const rotatingHashtags = pickRotatingHashtagSet(config);
     const rotatingKeywords = pickRotatingKeywordSet(config);
-    
-    let finalCaption = renderCaption(config.captionTemplate, candidate, rotating.text, rotatingKeywords.text);
-    
-    // Attempt AI Smart Caption
-    try {
-      const aiResult = await generateSmartCaption(candidate.mediaUrl, candidate.title, candidate.postType || "reel");
-      if (aiResult?.caption) {
-        console.log(`[AUTO ANIME] ✨ AI Smart Caption applied.`);
-        // Combine AI caption with hashtags and a separator
-        finalCaption = `${aiResult.caption}\n\n${aiResult.hashtags || rotating.text}`;
-      }
-    } catch (err) {
-      console.log(`[AUTO ANIME] ⚠️ AI Captioning failed, using template: ${err.message}`);
-    }
-
     const post = await Post.create({
       mediaUrl: preparedMediaUrl,
-      caption: finalCaption,
-      postType: candidate.postType || "reel",
-      scheduledTime: new Date(Date.now() + queueDelaySeconds * 1000),
+      caption: renderCaption(config.captionTemplate, bestCandidate, rotatingHashtags.text, rotatingKeywords.text),
+      postType: bestCandidate.postType || "reel",
+      scheduledTime: new Date(Date.now() + (trigger === "manual" ? 60000 : 0)),
       status: "pending",
-      sourcePlatform: candidate.sourcePlatform,
-      sourceId: candidate.sourceId,
-      sourceUrl: candidate.sourceUrl
+      sourcePlatform: bestCandidate.sourcePlatform,
+      sourceId: bestCandidate.sourceId,
+      sourceUrl: bestCandidate.sourceUrl
     });
 
-    console.log(`[AUTO ANIME] ✅ Post created: ${post._id} (status: pending)`);
-
     config.lastRunStatus = "success";
-    config.lastRunMessage = `Success: Post #${post._id} created in queue.`;
-    await config.save();
-
-    await appendRecentSourceId(config, `${candidate.sourceId}:${candidate.postType || "reel"}`);
-    config.hashtagSets = rotating.sets;
-    config.hashtagSetCursor = rotating.nextCursor;
-    config.keywordSets = rotatingKeywords.sets;
+    config.lastRunMessage = `Successfully queued ${bestCandidate.postType}: ${bestCandidate.title.substring(0, 30)}...`;
+    config.recentSourceIds = [ `${bestCandidate.sourceId}:${bestCandidate.postType || "reel"}`, ...(config.recentSourceIds || [])].slice(0, MAX_RECENT_SOURCE_IDS);
+    config.hashtagSetCursor = rotatingHashtags.nextCursor;
     config.keywordSetCursor = rotatingKeywords.nextCursor;
-    if (config.continuousSearchEnabled && (candidate.postType || "reel") === "reel") {
-      config.continuousSearchEnabled = false;
-      config.continuousSearchRequestedAt = null;
-    }
-    config.continuousSearchLastAttemptAt = new Date();
+    config.continuousSearchEnabled = false;
     await config.save();
 
-    return {
-      queued: true,
-      postId: post._id,
-      postType: candidate.postType || "reel",
-      sourceUrl: candidate.sourceUrl,
-      subreddit: candidate.subreddit,
-      title: candidate.title
-    };
+    return { queued: true, postId: post._id, title: bestCandidate.title };
   } catch (error) {
-    console.error(`[AUTO ANIME] ❌ CRITICAL ERROR in runAutoAnimeNow:`, error?.message || error);
-    console.error(`[AUTO ANIME] Full error details:`, error);
-    
-    // Save failure to config so user can see it in UI
-    try {
-      const failConfig = await ensureConfig();
-      failConfig.lastRunStatus = "failed";
-      failConfig.lastRunMessage = `Error: ${error?.message || "Internal processing error"}`;
-      await failConfig.save();
-    } catch (saveErr) {
-      console.error("[AUTO ANIME] Could not save failure status to config:", saveErr.message);
-    }
-
-    return {
-      queued: false,
-      message: `Auto anime failed: ${error?.message || "Unknown error occurred"}. Check server logs.`,
-      error: error?.message
-    };
+    console.error(`[AUTO ANIME] ❌ CRITICAL ERROR:`, error.message);
+    const config = await ensureConfig();
+    config.lastRunStatus = "failed";
+    config.lastRunMessage = `System Error: ${error.message}`;
+    await config.save();
+    return { queued: false, message: error.message };
   }
 }
 
 export async function processAutoAnimeSchedule(now = new Date()) {
   const config = await ensureConfig();
-
-  if (
-    config.continuousSearchEnabled &&
-    String(config.continuousSearchContentType || "reel").toLowerCase() === "reel"
-  ) {
-    const result = await runAutoAnimeNow({ trigger: "scheduler" });
-    return {
-      triggered: true,
-      slot: null,
-      queued: result.queued,
-      message: result.message || "Continuous reel search attempt completed"
-    };
-  }
-
-  if (!config.enabled) {
-    return { triggered: false, reason: "disabled" };
-  }
-
-  const slots = uniqueSortedSlots(config.timeSlots);
-  if (!slots.length) {
-    return { triggered: false, reason: "no-slots" };
-  }
-
   const { dateKey, timeKey } = formatDateParts(now, config.timezone || "Asia/Kolkata");
 
-  if (!slots.includes(timeKey)) {
-    return { triggered: false, reason: "not-slot-time" };
+  // Priority 1: Continuous Search (Catch up if dry spell occurred)
+  if (config.continuousSearchEnabled) {
+    console.log(`[AUTO ANIME] 🔄 Continuous search active... grabbing current candidate.`);
+    return await runAutoAnimeNow({ trigger: "scheduler" });
   }
 
-  const alreadyRanOnDate = config.lastRunBySlot?.get(timeKey) === dateKey;
-  if (alreadyRanOnDate) {
-    return { triggered: false, reason: "already-ran" };
+  // Priority 2: Standard Daily Slots
+  if (!config.enabled) return { triggered: false, reason: "disabled" };
+  const slots = uniqueSortedSlots(config.timeSlots);
+  if (!slots.includes(timeKey)) return { triggered: false, reason: "not-slot-time" };
+
+  if (config.lastRunBySlot?.get(timeKey) === dateKey) return { triggered: false, reason: "already-ran" };
+
+  const result = await runAutoAnimeNow({ trigger: "scheduler" });
+  if (result.queued) {
+    config.lastRunBySlot.set(timeKey, dateKey);
+    await config.save();
+  }
+  return result;
+}
+
+export async function getAutoAnimeConfig() {
+  const config = await ensureConfig();
+  return config.toObject();
+}
+
+export async function updateAutoAnimeConfig(payload) {
+  const config = await ensureConfig();
+
+  if (payload.enabled !== undefined) config.enabled = Boolean(payload.enabled);
+  if (payload.timezone !== undefined) config.timezone = String(payload.timezone || "").trim() || "Asia/Kolkata";
+  if (payload.sourcePlatform !== undefined) config.sourcePlatform = ["reddit", "instagram"].includes(payload.sourcePlatform) ? payload.sourcePlatform : "reddit";
+  if (payload.contentType !== undefined) {
+    const next = String(payload.contentType || "").trim().toLowerCase();
+    config.contentType = ["reel", "post", "both"].includes(next) ? next : "reel";
+  }
+  if (payload.randomMode !== undefined) config.randomMode = Boolean(payload.randomMode);
+  if (payload.captionTemplate !== undefined) config.captionTemplate = String(payload.captionTemplate || "").trim();
+
+  if (payload.subreddits !== undefined) {
+    config.subreddits = normalizeList(payload.subreddits).map(v => v.replace(/^r\//i, "").trim()).filter(Boolean).slice(0, 20);
+  }
+  if (payload.instagramAccounts !== undefined) {
+    config.instagramAccounts = normalizeList(payload.instagramAccounts).map(v => v.replace(/^@/i, "").trim()).filter(Boolean).slice(0, 20);
+  }
+  if (payload.keywords !== undefined) {
+    config.keywords = normalizeList(payload.keywords).map(v => v.toLowerCase().trim()).filter(Boolean).slice(0, 20);
+  }
+  if (payload.timeSlots !== undefined) {
+    const slots = uniqueSortedSlots(normalizeList(payload.timeSlots).map(s => s.trim()));
+    config.timeSlots = slots.length ? slots : DEFAULT_SLOTS;
   }
 
-  const result = await runAutoAnimeNow();
+  if (payload.minScore !== undefined) config.minScore = Math.max(0, Number(payload.minScore) || 0);
+  if (payload.minWidth !== undefined) config.minWidth = Math.max(240, Number(payload.minWidth) || 240);
+  if (payload.maxAgeHours !== undefined) config.maxAgeHours = Math.min(720, Math.max(1, Number(payload.maxAgeHours) || 72));
 
-  config.lastRunBySlot.set(timeKey, dateKey);
+  if (payload.hashtagSets !== undefined) { config.hashtagSets = sanitizeHashtagSets(payload.hashtagSets); config.hashtagSetCursor = 0; }
+  if (payload.keywordSets !== undefined) { config.keywordSets = sanitizeKeywordSets(payload.keywordSets); config.keywordSetCursor = 0; }
+
+  if (payload.continuousSearchEnabled !== undefined) config.continuousSearchEnabled = Boolean(payload.continuousSearchEnabled);
+
   await config.save();
-
-  return {
-    triggered: true,
-    slot: timeKey,
-    queued: result.queued,
-    message: result.message || "Auto anime run completed"
-  };
+  return config.toObject();
 }
