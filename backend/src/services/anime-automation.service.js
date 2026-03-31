@@ -397,10 +397,20 @@ export async function runAutoAnimeNow(options = {}) {
     let bestCandidate = null;
     let preparedMediaUrl = "";
 
-    for (const candidate of candidates) {
+    // Limit to top 10 candidates to prevent long hangs
+    const testBatch = candidates.slice(0, 10);
+    let count = 0;
+
+    for (const candidate of testBatch) {
+      count++;
       const key = `${candidate.sourceId}:${candidate.postType || "reel"}`;
+      
       if (recentSourceIds.has(key)) continue;
       if (await Post.exists({ sourceId: candidate.sourceId })) continue;
+
+      // Real-time status for Dashboard
+      config.lastRunMessage = `Trying candidate ${count}/${testBatch.length}: ${candidate.title.substring(0, 25)}...`;
+      await config.save();
 
       bestCandidate = candidate;
       const localMediaUrl = await (candidate.postType === "post" ? cacheAutoImageCandidate(candidate) : prepareReelWithAudio(candidate));
