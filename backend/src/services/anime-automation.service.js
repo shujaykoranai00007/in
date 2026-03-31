@@ -232,7 +232,14 @@ const execFileAsync = promisify(execFile);
  * Extracts separate direct CDN URLs for video and audio. 
  */
 async function extractSeparateMediaUrlsWithYtDlp(sourceUrl) {
-  const BASE_ARGS = ["-m", "yt_dlp", "-j", "--no-playlist"];
+  const BASE_ARGS = [
+    "-m", "yt_dlp", 
+    "-j", 
+    "--no-playlist",
+    "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "--add-header", "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+    "--add-header", "Accept-Language:en-US,en;q=0.9"
+  ];
   try {
     const { stdout } = await execFileAsync("python", BASE_ARGS.concat(sourceUrl), { timeout: 45000 });
     const info = JSON.parse(stdout.trim());

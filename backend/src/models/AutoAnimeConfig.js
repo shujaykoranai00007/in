@@ -42,7 +42,7 @@ const autoAnimeConfigSchema = new mongoose.Schema(
     },
     minScore: {
       type: Number,
-      default: 20,
+      default: 5,
       min: 0
     },
     minWidth: {
