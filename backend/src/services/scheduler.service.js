@@ -3,7 +3,7 @@ import { publishPost } from "./instagram.service.js";
 import { cleanupPostLocalMedia } from "./media-cleanup.service.js";
 
 const MAX_RETRIES = 3;
-const PROCESSING_STALE_MINUTES = 8;
+const PROCESSING_STALE_MINUTES = 20;
 const REEL_WAIT_RETRY_MINUTES = 1;
 const RETRY_GAP_SECONDS = Math.max(15, Number(process.env.UPLOAD_RETRY_GAP_SECONDS) || 60);
 
