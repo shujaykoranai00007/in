@@ -4,7 +4,8 @@ import fs from "fs";
 import path from "path";
 import sharp from "sharp";
 import ffmpegPath from "ffmpeg-static";
-import { spawn } from "child_process";
+import { execFile, spawn } from "child_process";
+import { promisify } from "util";
 import { Post } from "../models/Post.js";
 import { fileURLToPath } from "url";
 import { getRedditAnimeCandidates } from "./anime-fetch.service.js";
@@ -224,35 +225,60 @@ async function muxVideoWithAudio(videoPath, audioPath, outputPath) {
   });
 }
 
-function deriveDashUrlFromReelUrl(mediaUrl) {
-  try {
-    const parsed = new URL(mediaUrl);
-    if (parsed.hostname.toLowerCase() !== "v.redd.it") return "";
-    const segments = parsed.pathname.split("/").filter(Boolean);
-    if (!segments.length) return "";
-    return `${parsed.protocol}//${parsed.host}/${segments[0]}/DASHPlaylist.mpd`;
-  } catch { return ""; }
-}
+const execFileAsync = promisify(execFile);
 
-async function pickDashAudioUrl(dashUrl) {
-  if (!dashUrl) return "";
+/**
+ * Strategy: yt-dlp (Gold Standard)
+ * Extracts separate direct CDN URLs for video and audio. 
+ */
+async function extractSeparateMediaUrlsWithYtDlp(sourceUrl) {
+  const BASE_ARGS = ["-m", "yt_dlp", "-j", "--no-playlist"];
   try {
-    const { data } = await axios.get(dashUrl, { timeout: 15000, responseType: "text", headers: { "User-Agent": "InstaFlowScheduler/1.0" } });
-    const xml = String(data || "");
-    const audioMatches = [...xml.matchAll(/<BaseURL>([^<]+)<\/BaseURL>/gi)]
-      .map(m => new URL(m[1].trim(), dashUrl).toString())
-      .filter(url => /(audio|AUDIO_|\.m4a|\.mp4)/i.test(url) && !/(video|CMAF_|DASH_\d+\.mp4)/i.test(url));
-    return audioMatches.sort((a,b) => b.length - a.length)[0] || "";
-  } catch { return ""; }
+    const { stdout } = await execFileAsync("python", BASE_ARGS.concat(sourceUrl), { timeout: 45000 });
+    const info = JSON.parse(stdout.trim());
+    
+    // Find best video-only and best audio-only
+    const formats = Array.isArray(info.formats) ? info.formats : [];
+    
+    const videoUrl = formats.reverse().find(f => f.vcodec !== "none" && f.acodec === "none")?.url 
+      || info.url; // fallback to single-file if no split found
+
+    const audioUrl = formats.find(f => f.vcodec === "none" && f.acodec !== "none")?.url;
+
+    if (!videoUrl) return null;
+
+    return { 
+      videoUrl, 
+      audioUrl: audioUrl || null,
+      isSplit: !!audioUrl 
+    };
+  } catch (err) {
+    console.error(`[AUTO ANIME] yt-dlp extraction failed: ${err.message}`);
+    return null;
+  }
 }
 
 /** COMPONENT PREPARATION **/
 
 async function prepareReelWithAudio(candidate) {
   if (candidate.postType !== "reel") return candidate.mediaUrl;
-  const dashUrl = candidate.dashUrl || deriveDashUrlFromReelUrl(candidate.mediaUrl);
-  const audioUrl = await pickDashAudioUrl(dashUrl);
-  if (!audioUrl) return candidate.mediaUrl;
+  
+  console.log(`[AUTO ANIME] 🔍 Extracting separate streams for ${candidate.title.substring(0, 20)}...`);
+  const media = await extractSeparateMediaUrlsWithYtDlp(candidate.sourceUrl || candidate.mediaUrl);
+  
+  if (!media || !media.videoUrl) {
+     console.warn(`[AUTO ANIME] ⚠️ Failed to extract video URL for candidate.`);
+     return null; 
+  }
+
+  // Mandatory Audio Check for Reddit Reels
+  if (candidate.sourceId.includes("reddit") && !media.audioUrl) {
+    console.warn(`[AUTO ANIME] 🔇 No audio found for Reddit reel. Skipping candidate to avoid silent post.`);
+    return null;
+  }
+
+  const audioUrl = media.audioUrl;
+  const videoUrl = media.videoUrl;
 
   const safeId = String(candidate.sourceId || Date.now()).replace(/[^a-zA-Z0-9_-]/g, "");
   const ts = Date.now();
@@ -262,14 +288,18 @@ async function prepareReelWithAudio(candidate) {
   const outputPath = path.resolve(uploadsDir, outputName);
 
   try {
-    console.log(`[AUTO ANIME] 📥 Starting parallel downloads for ${safeId}...`);
-    await Promise.all([
-      downloadToFile(candidate.mediaUrl, tempVideo),
-      downloadToFile(audioUrl, tempAudio)
-    ]);
-    
-    console.log(`[AUTO ANIME] 🎬 Muxing video and audio with 2 threads...`);
-    await muxVideoWithAudio(tempVideo, tempAudio, outputPath);
+    if (audioUrl) {
+      console.log(`[AUTO ANIME] 📥 Starting parallel source downloads for ${safeId}...`);
+      await Promise.all([
+        downloadToFile(videoUrl, tempVideo),
+        downloadToFile(audioUrl, tempAudio)
+      ]);
+      console.log(`[AUTO ANIME] 🎬 Muxing original video + audio streams...`);
+      await muxVideoWithAudio(tempVideo, tempAudio, outputPath);
+    } else {
+      console.log(`[AUTO ANIME] 📥 Downloading single-stream media...`);
+      await downloadToFile(videoUrl, outputPath);
+    }
     
     // Verify file exists
     const stats = await fs.promises.stat(outputPath).catch(() => null);
