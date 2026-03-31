@@ -9,7 +9,7 @@ import { Post } from "../models/Post.js";
 import { fileURLToPath } from "url";
 import { getRedditAnimeCandidates } from "./anime-fetch.service.js";
 import { getInstagramReelCandidates } from "./instagram-fetch.service.js";
-import { uploadToCatbox, uploadTo0x0St } from "./instagram.service.js";
+import { uploadToCatbox, uploadTo0x0St, mirrorMediaToPublicUrl } from "./instagram.service.js";
 
 const SLOT_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const DEFAULT_SLOTS = ["09:00", "12:30", "18:00"];
@@ -360,8 +360,17 @@ export async function runAutoAnimeNow(options = {}) {
       if (await Post.exists({ sourceId: candidate.sourceId })) continue;
 
       bestCandidate = candidate;
-      preparedMediaUrl = await (candidate.postType === "post" ? cacheAutoImageCandidate(candidate) : prepareReelWithAudio(candidate));
-      if (preparedMediaUrl) break;
+      const localMediaUrl = await (candidate.postType === "post" ? cacheAutoImageCandidate(candidate) : prepareReelWithAudio(candidate));
+      
+      if (localMediaUrl) {
+        console.log(`[AUTO ANIME] 📤 Mirroring prepared ${candidate.postType} to public storage...`);
+        const token = String(candidate.sourceId || Date.now()).replace(/[^a-zA-Z0-9_-]/g, "");
+        preparedMediaUrl = await mirrorMediaToPublicUrl(localMediaUrl, token).catch((err) => {
+          console.warn(`[AUTO ANIME] Mirror failed, using local URL: ${err.message}`);
+          return localMediaUrl;
+        });
+        break;
+      }
     }
 
     if (!preparedMediaUrl) {

@@ -281,7 +281,7 @@ function resolveLocalMediaPathFromUrl(mediaUrl) {
   }
 }
 
-async function mirrorMediaToPublicUrl(mediaUrl, token) {
+export async function mirrorMediaToPublicUrl(mediaUrl, token) {
   const ts = Date.now();
   const sourcePathname = (() => {
     try {
