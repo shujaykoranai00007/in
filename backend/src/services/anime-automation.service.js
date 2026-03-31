@@ -966,10 +966,14 @@ export async function runAutoAnimeNow(options = {}) {
   
   // IMMEDIATELY update status so UI doesn't hang on "Initializing..."
   console.log("[AUTO ANIME] 🚀 Initializing run-now...");
-  config.lastRunStatus = "searching";
-  config.lastRunMessage = "Starting background anime search...";
-  config.lastRunAt = new Date();
-  await config.save();
+  try {
+    config.lastRunStatus = "searching";
+    config.lastRunMessage = "Starting background anime search...";
+    config.lastRunAt = new Date();
+    await config.save();
+  } catch (initialSaveErr) {
+    console.error("[AUTO ANIME] Warning: Initial status save failed, but continuing run...", initialSaveErr.message);
+  }
 
   try {
     const trigger = options?.trigger === "scheduler" ? "scheduler" : "manual";

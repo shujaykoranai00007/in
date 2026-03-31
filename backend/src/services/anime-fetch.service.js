@@ -14,8 +14,9 @@ function createRedditClient(baseURL) {
     baseURL,
     timeout: REDDIT_TIMEOUT_MS,
     headers: {
-      "User-Agent": "InstaFlowScheduler/1.0 (+https://instaflow.app)",
-      Accept: "application/json"
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      Accept: "application/json",
+      Referer: "https://www.reddit.com/"
     }
   });
 }
@@ -225,7 +226,11 @@ async function fetchSubredditFeed(subreddit, sort = "hot") {
     const redditClient = createRedditClient(baseURL);
     try {
       const { data } = await redditClient.get(endpoint, {
-        params: { limit: REDDIT_LIMIT, raw_json: 1, t: "day" }
+        params: {
+          limit: REDDIT_LIMIT,
+          raw_json: 1,
+          ...(sort === "top" ? { t: "day" } : {})
+        }
       });
       const children = data?.data?.children || [];
       const posts = children.map((item) => item?.data).filter(Boolean);
@@ -257,22 +262,17 @@ export async function getRedditAnimeCandidates(config) {
   const subreddits = config.subreddits.length ? config.subreddits : ["Animeedits", "AnimeMusicVideos", "anime_edits", "anime", "AnimeMeme", "animememes"];
   const results = [];
 
-  console.log(`[REDDIT CANDIDATES] Starting search across ${subreddits.length} subreddits: ${subreddits.join(", ")}`);
-  console.log(`[REDDIT CANDIDATES] Settings: contentType=${config.contentType}, minScore=${config.minScore}, minWidth=${config.minWidth}px, maxAge=${config.maxAgeHours}h`);
-
-  for (const subreddit of subreddits) {
+  console.log(`[REDDIT CANDIDATES] 📂 Parallel fetching across ${subreddits.length} subreddits...`);
+  
+  const subredditPromises = subreddits.map(async (subreddit) => {
     try {
-      console.log(`[REDDIT CANDIDATES] 📂 Fetching /r/${subreddit}...`);
       const [hotPosts, topPosts] = await Promise.all([
         fetchSubredditFeed(subreddit, "hot"),
         fetchSubredditFeed(subreddit, "top")
       ]);
 
       const merged = [...hotPosts, ...topPosts];
-      console.log(`[REDDIT CANDIDATES]    ✓ Merged ${hotPosts.length} hot + ${topPosts.length} top posts from /r/${subreddit}`);
-
-      let reelCount = 0;
-      let imageCount = 0;
+      const subredditResults = [];
 
       for (const post of merged) {
         if (post.stickied || post.over_18 || post.is_gallery) {
@@ -281,27 +281,26 @@ export async function getRedditAnimeCandidates(config) {
 
         if (isAllowedType(config, "reel")) {
           const reelCandidate = extractReelCandidate(post, config);
-          if (reelCandidate) {
-            results.push(reelCandidate);
-            reelCount++;
-          }
+          if (reelCandidate) subredditResults.push(reelCandidate);
         }
 
         if (isAllowedType(config, "post")) {
           const imageCandidate = extractImageCandidate(post, config);
-          if (imageCandidate) {
-            results.push(imageCandidate);
-            imageCount++;
-          }
+          if (imageCandidate) subredditResults.push(imageCandidate);
         }
       }
 
-      console.log(`[REDDIT CANDIDATES]    → Extracted ${reelCount} reels + ${imageCount} images from /r/${subreddit}`);
+      console.log(`[REDDIT CANDIDATES] ✓ /r/${subreddit}: Extracted ${subredditResults.length} candidates`);
+      return subredditResults;
     } catch (error) {
-      console.error(`[REDDIT CANDIDATES] ❌ Failed to fetch /r/${subreddit}: ${error?.message || error}`);
-      console.error(`[REDDIT CANDIDATES]    Full error:`, error);
+      const statusCode = error.response?.status || "UNK";
+      console.error(`[REDDIT CANDIDATES] ❌ /r/${subreddit} [HTTP ${statusCode}]: ${error.message}`);
+      return [];
     }
-  }
+  });
+
+  const allSubredditResults = await Promise.all(subredditPromises);
+  results.push(...allSubredditResults.flat());
 
   if (results.length === 0) {
     console.log(`[REDDIT CANDIDATES] 🔦 No results from subreddits. Trying global search fallback...`);
