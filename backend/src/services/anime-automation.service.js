@@ -8,6 +8,7 @@ import { spawn } from "child_process";
 import { Post } from "../models/Post.js";
 import { fileURLToPath } from "url";
 import { getRedditAnimeCandidates } from "./anime-fetch.service.js";
+import { getInstagramReelCandidates } from "./instagram-fetch.service.js";
 import { uploadFile as uploadToGoogleDrive } from "./google-drive.service.js";
 import { generateSmartCaption } from "./ai.service.js";
 import { env } from "../config/env.js";
@@ -1003,13 +1004,19 @@ export async function runAutoAnimeNow(options = {}) {
     let candidate = null;
     let preparedMediaUrl = "";
 
-    console.log(`[AUTO ANIME] 📂 Fetching all candidates from Reddit...`);
-    const subredditsToSearch = (config.subreddits.length ? config.subreddits : FALLBACK_SUBREDDITS).slice(0, 3);
-    
-    config.lastRunMessage = `Searching Reddit across /r/${subredditsToSearch.join(", /r/")}...`;
-    await config.save();
-
-    const allCandidates = await getRedditAnimeCandidates(candidateConfig);
+    let allCandidates = [];
+    if (config.sourcePlatform === "instagram") {
+      console.log(`[AUTO ANIME] 📸 Starting Instagram extraction mode...`);
+      config.lastRunMessage = "Searching Instagram accounts for reels...";
+      await config.save();
+      allCandidates = await getInstagramReelCandidates(candidateConfig);
+    } else {
+      console.log(`[AUTO ANIME] 🔦 Starting Reddit extraction mode...`);
+      const subredditsToSearch = (config.subreddits.length ? config.subreddits : ["Animeedits", "AnimeMusicVideos", "anime_edits", "anime"]).slice(0, 3);
+      config.lastRunMessage = `Searching Reddit across /r/${subredditsToSearch.join(", /r/")}...`;
+      await config.save();
+      allCandidates = await getRedditAnimeCandidates(candidateConfig);
+    }
     const recentSourceIds = new Set(config.recentSourceIds || []);
     
     if (!allCandidates.length) {

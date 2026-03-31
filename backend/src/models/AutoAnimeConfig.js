@@ -16,7 +16,7 @@ const autoAnimeConfigSchema = new mongoose.Schema(
     },
     sourcePlatform: {
       type: String,
-      enum: ["reddit"],
+      enum: ["reddit", "instagram"],
       default: "reddit"
     },
     contentType: {
@@ -31,6 +31,10 @@ const autoAnimeConfigSchema = new mongoose.Schema(
     subreddits: {
       type: [String],
       default: ["Animeedits", "AnimeMusicVideos", "anime_edits", "anime"]
+    },
+    instagramAccounts: {
+      type: [String],
+      default: ["anime_edits", "amv_community", "anime_vibes", "amv.hub", "animeedits_daily"]
     },
     keywords: {
       type: [String],
