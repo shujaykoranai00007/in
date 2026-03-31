@@ -8,6 +8,16 @@ import sharp from "sharp";
 // Disable sharp cache to save RAM on 512MB tier
 sharp.cache(false);
 
+// Global Error Resilience - prevent app from crashing on intermittent errors
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("[CRITICAL] Unhandled Rejection at:", promise, "reason:", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("[CRITICAL] Uncaught Exception:", error);
+  // Optional: Graceful restart logic could go here
+});
+
 async function bootstrap() {
   await connectDatabase();
   startScheduler();

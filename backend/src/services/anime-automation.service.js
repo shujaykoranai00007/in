@@ -198,7 +198,7 @@ async function muxVideoWithAudio(videoPath, audioPath, outputPath) {
     const ff = spawn(ffmpegPath, [
       "-y", "-threads", "2", "-i", videoPath, "-i", audioPath,
       "-map", "0:v:0", "-map", "1:a:0", "-c:v", "libx264", "-preset", "ultrafast",
-      "-crf", "32", "-maxrate", "2000k", "-bufsize", "2000k", "-tune", "fastdecode", "-max_muxing_queue_size", "128",
+      "-crf", "32", "-maxrate", "1500k", "-bufsize", "2000k", "-tune", "fastdecode", "-max_muxing_queue_size", "128",
       "-profile:v", "main", "-level:v", "4.0", "-pix_fmt", "yuv420p",
       "-vf", "scale=540:960:force_original_aspect_ratio=decrease,pad=540:960:(ow-iw)/2:(oh-ih)/2,fps=30,format=yuv420p",
       "-r", "30", "-g", "60", "-c:a", "aac", "-b:a", "64k", "-ar", "44100", "-ac", "2",

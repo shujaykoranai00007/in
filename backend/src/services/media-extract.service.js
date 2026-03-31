@@ -1,28 +1,44 @@
 import axios from "axios";
+import { execFile } from "child_process";
+import { promisify } from "util";
+import { existsSync } from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const execFileAsync = promisify(execFile);
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const BROWSER_HEADERS = {
   "User-Agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-  Accept: "text/html"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.5",
+  "Accept-Encoding": "gzip, deflate, br",
+  "Cache-Control": "no-cache",
+  "Sec-Fetch-Dest": "document",
+  "Sec-Fetch-Mode": "navigate",
+  "Sec-Fetch-Site": "none"
 };
 
-function buildRequestHeaders(extra = {}) {
-  const headers = {
-    ...BROWSER_HEADERS,
-    ...extra
-  };
+// Resolve INSTAGRAM_COOKIES_FILE relative to project root
+function getCookiesFilePath() {
+  const envVal = process.env.INSTAGRAM_COOKIES_FILE;
+  if (!envVal) return null;
+  // Location is src/services/, so ../../../ takes us to project root
+  const resolved = path.isAbsolute(envVal)
+    ? envVal
+    : path.resolve(__dirname, "../../../", envVal);
+  return existsSync(resolved) ? resolved : null;
+}
 
-  const sessionId = String(process.env.INSTAGRAM_SESSIONID || "").trim();
-  if (sessionId) {
-    headers.Cookie = `sessionid=${sessionId}`;
-    headers.Referer = "https://www.instagram.com/";
-    headers["X-IG-App-ID"] = "936619743392459";
-  }
-
-  return headers;
+function isInstagramUrl(url) {
+  return /instagram\.com\/(p|reel|tv)\//.test(url);
 }
 
 function decodeHtmlEntities(str) {
+  if (!str) return "";
   return str
     .replace(/&amp;/g, "&")
     .replace(/&#039;/g, "'")
@@ -31,485 +47,154 @@ function decodeHtmlEntities(str) {
     .replace(/&gt;/g, ">");
 }
 
-function isInstagramUrl(url) {
-  return /instagram\.com\/(p|reel|tv)\//.test(url);
-}
-
-function normalizeInstagramUrl(sourceUrl) {
-  try {
-    const parsed = new URL(sourceUrl);
-    parsed.search = "";
-    parsed.hash = "";
-    return parsed.toString();
-  } catch {
-    return sourceUrl;
-  }
-}
-
 function extractShortcode(url) {
-  const match = url.match(/instagram\.com\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/i);
-  return match?.[1] || null;
+  const m = url.match(/instagram\.com\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/);
+  return m ? m[1] : null;
 }
 
-function extractMetaContentByProperty(html, propertyName) {
-  const metaTags = html.match(/<meta[^>]*>/gi) || [];
+/**
+ * Strategy 0 – yt-dlp (most reliable).
+ */
+async function extractWithYtDlp(sourceUrl) {
+  const cookieFile = getCookiesFilePath();
+  const BASE_ARGS = ["-m", "yt_dlp", "-j", "--no-playlist"];
+  
+  const ATTEMPTS = [
+    // 1. No cookies
+    BASE_ARGS.concat(sourceUrl),
+  ];
 
-  for (const tag of metaTags) {
-    const propertyMatch = tag.match(/\bproperty\s*=\s*(["'])(.*?)\1/i);
-    if (!propertyMatch) {
-      continue;
-    }
-
-    if (String(propertyMatch[2] || "").toLowerCase() !== propertyName.toLowerCase()) {
-      continue;
-    }
-
-    const contentMatch = tag.match(/\bcontent\s*=\s*(["'])([\s\S]*?)\1/i);
-    if (contentMatch?.[2]) {
-      return contentMatch[2];
-    }
+  // 2. Custom cookie file if provided in .env
+  if (cookieFile) {
+    ATTEMPTS.push(BASE_ARGS.concat(["--cookies", cookieFile, sourceUrl]));
   }
 
-  return "";
+  // 3. Browser sessions (Chrome/Edge/Firefox)
+  ATTEMPTS.push(BASE_ARGS.concat(["--cookies-from-browser", "chrome", sourceUrl]));
+  ATTEMPTS.push(BASE_ARGS.concat(["--cookies-from-browser", "edge", sourceUrl]));
+  ATTEMPTS.push(BASE_ARGS.concat(["--cookies-from-browser", "firefox", sourceUrl]));
+
+  for (const args of ATTEMPTS) {
+    try {
+      const { stdout } = await execFileAsync("python", args, { timeout: 40000 });
+      const info = JSON.parse(stdout.trim());
+      
+      const mediaUrl = info.url || 
+        (Array.isArray(info.requested_formats) ? info.requested_formats.find((f) => f.vcodec && f.vcodec !== "none")?.url : undefined) ||
+        (Array.isArray(info.formats) ? [...info.formats].reverse().find((f) => f.url && f.vcodec && f.vcodec !== "none")?.url : undefined);
+      
+      if (mediaUrl) {
+        return {
+          mediaUrl,
+          isVideo: info.vcodec ? info.vcodec !== "none" : (info.ext !== "jpg" && info.ext !== "png"),
+          rawDesc: info.description || info.title || ""
+        };
+      }
+    } catch (err) {
+      // try next
+    }
+  }
+  return null;
 }
 
+/**
+ * Strategy 1 – parse og: meta tags.
+ */
 function extractFromOgTags(html) {
-  const rawVideo = extractMetaContentByProperty(html, "og:video");
-  const rawImage =
-    extractMetaContentByProperty(html, "og:image") ||
-    extractMetaContentByProperty(html, "twitter:image");
-  const rawDesc = extractMetaContentByProperty(html, "og:description");
-
-  const rawMediaUrl = rawVideo || rawImage;
-  if (!rawMediaUrl) {
-    return null;
-  }
-
+  const videoMatch = html.match(/<meta[^>]+property="og:video"[^>]+content="([^"]+)"/);
+  const imageMatch = html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]+)"/);
+  const descMatch = html.match(/<meta[^>]+property="og:description"[^>]+content="([^"]+)"/);
+  const rawMediaUrl = videoMatch?.[1] ?? imageMatch?.[1];
+  if (!rawMediaUrl) return null;
   return {
     mediaUrl: decodeHtmlEntities(rawMediaUrl),
-    isVideo: Boolean(rawVideo),
-    rawDesc: rawDesc || ""
+    isVideo: Boolean(videoMatch),
+    rawDesc: descMatch?.[1] ?? ""
   };
 }
 
+/**
+ * Strategy 2 – parse JSON-LD data.
+ */
 function extractFromJsonLd(html) {
-  const blocks = [
-    ...html.matchAll(
-      /<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi
-    )
-  ];
-
+  const blocks = [...html.matchAll(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)];
   for (const [, raw] of blocks) {
     try {
-      const parsed = JSON.parse(raw);
-      const items = Array.isArray(parsed) ? parsed : [parsed];
-
+      const obj = JSON.parse(raw);
+      const items = Array.isArray(obj) ? obj : [obj];
       for (const item of items) {
-        if (item?.contentUrl) {
-          return {
-            mediaUrl: item.contentUrl,
-            isVideo: item?.["@type"] === "VideoObject",
-            rawDesc: item.caption || item.description || ""
-          };
-        }
-        if (item?.video?.contentUrl) {
-          return {
-            mediaUrl: item.video.contentUrl,
-            isVideo: true,
-            rawDesc: item.caption || item.description || ""
-          };
-        }
-        if (item?.image?.url) {
-          return {
-            mediaUrl: item.image.url,
-            isVideo: false,
-            rawDesc: item.caption || item.description || ""
-          };
-        }
+        if (item.contentUrl) return { mediaUrl: item.contentUrl, isVideo: item["@type"] === "VideoObject", rawDesc: item.caption || item.description || "" };
+        if (item.video?.contentUrl) return { mediaUrl: item.video.contentUrl, isVideo: true, rawDesc: item.caption || "" };
       }
-    } catch {
-      // Ignore malformed JSON-LD blocks.
-    }
+    } catch { /* skip */ }
   }
-
   return null;
 }
 
-function extractFromEmbedMarkup(html) {
-  const videoSrc = html.match(/<video[^>]+src="([^"]+)"/i)?.[1];
-  if (videoSrc) {
-    return {
-      mediaUrl: decodeHtmlEntities(videoSrc),
-      isVideo: true,
-      rawDesc: ""
-    };
-  }
+/**
+ * Strategy 3 – embed page.
+ */
+async function extractFromEmbedPage(shortcode) {
+  const embedUrl = `https://www.instagram.com/reel/${shortcode}/embed/captioned/`;
+  try {
+    const res = await axios.get(embedUrl, { headers: BROWSER_HEADERS, timeout: 15000 });
+    const html = res.data;
 
-  const imgSrc = html.match(/<img[^>]+src="(https:\/\/scontent[^"]+)"/i)?.[1];
-  if (imgSrc) {
-    return {
-      mediaUrl: decodeHtmlEntities(imgSrc),
-      isVideo: false,
-      rawDesc: ""
-    };
-  }
+    const videoSrc = html.match(/<video[^>]+src="([^"]+)"/i)?.[1];
+    if (videoSrc) return { mediaUrl: decodeHtmlEntities(videoSrc), isVideo: true, rawDesc: "" };
 
-  return null;
-}
+    const imgSrc = html.match(/<img[^>]+src="(https:\/\/scontent[^"]+)"/i)?.[1];
+    if (imgSrc) return { mediaUrl: decodeHtmlEntities(imgSrc), isVideo: false, rawDesc: "" };
 
-function extractFromSimpleOgRegex(html) {
-  const patterns = [
-    /<meta[^>]+property=["']og:video["'][^>]+content=["']([^"']+)["']/i,
-    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:video["']/i,
-    /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
-    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i
-  ];
-
-  let mediaUrl = "";
-  let isVideo = false;
-
-  for (const [index, pattern] of patterns.entries()) {
-    const match = html.match(pattern);
-    if (match?.[1]) {
-      mediaUrl = decodeHtmlEntities(match[1]);
-      isVideo = index <= 1;
-      break;
-    }
-  }
-
-  if (!mediaUrl) {
+    return extractFromOgTags(html);
+  } catch {
     return null;
   }
-
-  return {
-    mediaUrl,
-    isVideo,
-    rawDesc: ""
-  };
 }
 
-function extractFromInstagramApiPayload(payload) {
-  const media =
-    payload?.items?.[0] ||
-    payload?.graphql?.shortcode_media ||
-    payload?.data?.xdt_shortcode_media ||
-    null;
-
-  if (!media) {
-    return null;
-  }
-
-  const isVideo = Boolean(media?.is_video || media?.video_url || media?.media_type === 2);
-  const mediaUrl =
-    media?.video_url ||
-    media?.display_url ||
-    media?.image_versions2?.candidates?.[0]?.url ||
-    media?.thumbnail_src ||
-    "";
-
-  if (!mediaUrl) {
-    return null;
-  }
-
-  const rawDesc =
-    media?.caption?.text ||
-    media?.edge_media_to_caption?.edges?.[0]?.node?.text ||
-    "";
-
-  return {
-    mediaUrl,
-    isVideo,
-    rawDesc
-  };
-}
-
-async function extractFromJsonEndpoint(normalizedUrl) {
-  const jsonUrl = `${normalizedUrl}${normalizedUrl.endsWith("/") ? "" : "/"}?__a=1&__d=dis`;
-
-  const { data } = await axios.get(jsonUrl, {
-    headers: buildRequestHeaders({
-      Accept: "application/json,text/plain,*/*",
-      "X-Requested-With": "XMLHttpRequest"
-    }),
-    timeout: 15000,
-    maxRedirects: 5
-  });
-
-  return extractFromInstagramApiPayload(data);
-}
-
-function buildCaption(rawDesc) {
-  if (!rawDesc) {
-    return "";
-  }
-
-  const decoded = decodeHtmlEntities(rawDesc.trim());
-  const colonIdx = decoded.indexOf(": ");
-  const clean = colonIdx !== -1 ? decoded.slice(colonIdx + 2) : decoded;
-  return clean.trim();
-}
-
-function looksLikeVideoUrl(url = "") {
-  const text = String(url || "").toLowerCase();
-  return text.includes(".mp4") || text.includes("video") || text.includes("/reel/");
-}
-
-function tryDecodeEscapedUrl(raw = "") {
-  if (!raw) {
-    return "";
-  }
-
-  return raw
-    .replace(/\\u0026/g, "&")
-    .replace(/\\\//g, "/")
-    .replace(/\\u002F/g, "/")
-    .replace(/\\u003D/g, "=")
-    .replace(/\\u003F/g, "?")
-    .replace(/\\u0025/g, "%");
-}
-
-function extractVideoFromRawMarkup(html) {
-  const escapedMp4UrlPattern = new RegExp("(https?:\\\\/\\\\/[^\\\"'\\s]+\\.mp4[^\\\"'\\s]*)", "i");
-  const patterns = [
-    /<meta[^>]+property=["']og:video(?::secure_url)?["'][^>]+content=["']([^"']+)["']/i,
-    /<video[^>]+src=["']([^"']+)["']/i,
-    /"video_url"\s*:\s*"([^\"]+\.mp4[^\"]*)"/i,
-    /"contentUrl"\s*:\s*"([^\"]+\.mp4[^\"]*)"/i,
-    escapedMp4UrlPattern,
-    /(https?:\/\/[^"'\s]+\.mp4[^"'\s]*)/i
-  ];
-
-  for (const pattern of patterns) {
-    const match = html.match(pattern);
-    if (match?.[1]) {
-      const decoded = decodeHtmlEntities(tryDecodeEscapedUrl(match[1]));
-      if (looksLikeVideoUrl(decoded)) {
-        return decoded;
-      }
-    }
-  }
-
-  return "";
-}
-
-function detectInstagramAccessIssue(html = "") {
-  const text = String(html || "").toLowerCase();
-
-  if (
-    text.includes("post isn't available") ||
-    text.includes("post isn\u2019t available") ||
-    text.includes("the link may be broken") ||
-    text.includes("page isn't available")
-  ) {
-    return "This Instagram post is unavailable (deleted, private, or invalid URL). Open the link in browser and make sure it is public.";
-  }
-
-  if (text.includes("this account is private") || text.includes("private account")) {
-    return "This Instagram account/post is private. Use a public post URL or upload file directly.";
-  }
-
-  if (text.includes("login") && text.includes("instagram")) {
-    return "Instagram requires login/session for this link. Add INSTAGRAM_SESSIONID on backend or use Upload File.";
-  }
-
-  return "";
-}
-
-async function fetchHtml(url, headers = {}) {
-  const response = await axios.get(url, {
-    headers: buildRequestHeaders(headers),
-    timeout: 15000,
-    maxRedirects: 5
-  });
-
-  return String(response.data || "");
-}
-
-async function fetchAndExtract(url, headers) {
-  const response = await axios.get(url, {
-    headers: buildRequestHeaders(headers),
-    timeout: 15000,
-    maxRedirects: 5
-  });
-
-  const html = response.data;
-  return extractFromJsonLd(html) ?? extractFromOgTags(html);
-}
-
-export async function extractMediaFromUrl(sourceUrl, options = {}) {
-  const { preferVideo = false } = options || {};
-  const normalizedUrl = normalizeInstagramUrl(sourceUrl);
-
-  if (!isInstagramUrl(normalizedUrl)) {
+/**
+ * Main Entry Point
+ */
+export async function extractMediaFromUrl(sourceUrl) {
+  if (!isInstagramUrl(sourceUrl)) {
     throw new Error("URL is not a recognised Instagram post/reel link");
   }
 
-  const shortcode = extractShortcode(normalizedUrl);
-  const isReelUrl = /instagram\.com\/reel\//.test(normalizedUrl);
+  const shortcode = extractShortcode(sourceUrl);
+  const isReelUrl = /instagram\.com\/reel\//.test(sourceUrl);
 
-  let extracted = null;
+  // 1. yt-dlp (Most Reliable)
+  let extracted = await extractWithYtDlp(sourceUrl);
 
-  try {
-    extracted = await fetchAndExtract(normalizedUrl, BROWSER_HEADERS);
-  } catch {
-    // Continue to embed-page fallback.
-  }
-
-  if (!extracted) {
-    try {
-      extracted = await fetchAndExtract(normalizedUrl, {
-        "User-Agent": BROWSER_HEADERS["User-Agent"],
-        Accept: "text/html"
-      });
-    } catch {
-      // Continue to additional fallbacks.
-    }
-  }
-
+  // 2. Embed strategy (Grateful fallback)
   if (!extracted && shortcode) {
-    const type = normalizedUrl.match(/instagram\.com\/(p|reel|tv)\//i)?.[1] || "p";
-    const altUrl = `https://www.ddinstagram.com/${type}/${shortcode}/`;
-
-    try {
-      extracted = await fetchAndExtract(altUrl, {
-        "User-Agent": BROWSER_HEADERS["User-Agent"],
-        Accept: "text/html"
-      });
-    } catch {
-      // Continue to embed-page fallback.
-    }
+    extracted = await extractFromEmbedPage(shortcode);
   }
 
-  if (!extracted && shortcode) {
-    const embedCandidates = [
-      `https://www.instagram.com/reel/${shortcode}/embed/captioned/`,
-      `https://www.instagram.com/p/${shortcode}/embed/captioned/`,
-      `https://www.instagram.com/tv/${shortcode}/embed/captioned/`
-    ];
-
-    for (const embedUrl of embedCandidates) {
-      try {
-        const embedResponse = await axios.get(embedUrl, {
-          headers: buildRequestHeaders(),
-          timeout: 15000
-        });
-        const html = embedResponse.data;
-        extracted =
-          extractFromEmbedMarkup(html) ??
-          extractFromJsonLd(html) ??
-          extractFromOgTags(html);
-
-        if (extracted) {
-          break;
-        }
-      } catch {
-        // Try next embed URL.
-      }
-    }
+  // 3. Main page scrape (Last resort)
+  if (!extracted) {
+    try {
+      const response = await axios.get(sourceUrl, { headers: BROWSER_HEADERS, timeout: 15000 });
+      const html = response.data;
+      extracted = extractFromJsonLd(html) ?? extractFromOgTags(html);
+    } catch { /* fail */ }
   }
 
   if (!extracted) {
-    try {
-      extracted = await extractFromJsonEndpoint(normalizedUrl);
-    } catch {
-      // Continue to final failure message.
-    }
+    throw new Error("Could not extract media content. Post may be private or Instagram is blocking access.");
   }
 
-  if (!extracted) {
-    try {
-      const response = await axios.get(normalizedUrl, {
-        headers: buildRequestHeaders({
-          "User-Agent": BROWSER_HEADERS["User-Agent"],
-          Accept: "text/html"
-        }),
-        timeout: 15000,
-        maxRedirects: 5
-      });
-
-      extracted = extractFromSimpleOgRegex(response.data);
-    } catch {
-      // Continue to final failure message.
-    }
-  }
-
-  if (!extracted) {
-    try {
-      const sourceHtml = await fetchHtml(normalizedUrl, {
-        "User-Agent": BROWSER_HEADERS["User-Agent"],
-        Accept: "text/html"
-      });
-
-      const accessIssue = detectInstagramAccessIssue(sourceHtml);
-      if (accessIssue) {
-        throw new Error(accessIssue);
-      }
-    } catch (error) {
-      if (error?.message && !String(error.message).toLowerCase().includes("timeout")) {
-        throw error;
-      }
-    }
-
-    throw new Error(
-      "Could not extract media from this Instagram URL. Instagram may block this link. Use Upload File for guaranteed results."
-    );
-  }
-
-  if (preferVideo && shortcode && extracted && !extracted.isVideo && !looksLikeVideoUrl(extracted.mediaUrl)) {
-    const forceVideoCandidates = [
-      `https://www.instagram.com/p/${shortcode}/`,
-      `https://www.instagram.com/reel/${shortcode}/`,
-      `https://www.ddinstagram.com/p/${shortcode}/`,
-      `https://www.ddinstagram.com/reel/${shortcode}/`,
-      `https://www.instagram.com/reel/${shortcode}/embed/captioned/`,
-      `https://www.instagram.com/p/${shortcode}/embed/captioned/`
-    ];
-
-    for (const candidateUrl of forceVideoCandidates) {
-      try {
-        const candidateHtml = await fetchHtml(candidateUrl, {
-          "User-Agent": BROWSER_HEADERS["User-Agent"],
-          Accept: "text/html"
-        });
-
-        const rawVideo = extractVideoFromRawMarkup(candidateHtml);
-        if (rawVideo) {
-          extracted = {
-            mediaUrl: rawVideo,
-            isVideo: true,
-            rawDesc: extracted?.rawDesc || ""
-          };
-          break;
-        }
-
-        const candidate =
-          extractFromEmbedMarkup(candidateHtml) ??
-          extractFromJsonLd(candidateHtml) ??
-          extractFromOgTags(candidateHtml) ??
-          extractFromSimpleOgRegex(candidateHtml);
-
-        if (candidate && (candidate.isVideo || looksLikeVideoUrl(candidate.mediaUrl))) {
-          extracted = {
-            ...candidate,
-            isVideo: true
-          };
-          break;
-        }
-      } catch {
-        // Try next candidate URL.
-      }
-    }
-
-    if (!extracted?.isVideo && !looksLikeVideoUrl(extracted?.mediaUrl || "")) {
-      throw new Error(
-        "This link resolved to an image post, not a reel video. Use a direct reel URL or Upload File for full reel posting."
-      );
-    }
-  }
-
+  const { mediaUrl, isVideo, rawDesc } = extracted;
   return {
-    mediaUrl: extracted.mediaUrl,
-    postType: isReelUrl || extracted.isVideo ? "reel" : "post",
-    caption: buildCaption(extracted.rawDesc)
+    mediaUrl,
+    postType: (isReelUrl || isVideo) ? "reel" : "post",
+    caption: buildCaption(rawDesc)
   };
+}
+
+function buildCaption(rawDesc) {
+  if (!rawDesc) return "";
+  const decoded = decodeHtmlEntities(rawDesc.trim());
+  const colonIdx = decoded.indexOf(": ");
+  return (colonIdx !== -1 ? decoded.slice(colonIdx + 2) : decoded).trim();
 }

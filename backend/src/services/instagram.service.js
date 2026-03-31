@@ -417,7 +417,7 @@ async function transcodeToInstagramReel(inputPath, outputPath) {
     "-maxrate",
     "1500k",
     "-bufsize",
-    "3000k",
+    "2000k",
     "-c:a",
     "aac",
     "-b:a",
