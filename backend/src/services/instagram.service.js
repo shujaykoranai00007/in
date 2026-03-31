@@ -12,7 +12,7 @@ const graphApi = axios.create({
   timeout: 30000
 });
 
-const CONTAINER_READY_MAX_CHECKS = 20;
+const CONTAINER_READY_MAX_CHECKS = 60;
 const CONTAINER_READY_DELAY_MS = 3000;
 const MIRROR_MAX_BYTES = 400 * 1024 * 1024;
 const __filename = fileURLToPath(import.meta.url);
@@ -547,12 +547,16 @@ async function getContainerStatus(creationId) {
   return data;
 }
 
-async function waitForContainerReady(creationId, postType) {
+async function waitForContainerReady(creationId, postType, onHeartbeat = null) {
   if (postType !== "reel") {
     return;
   }
 
   for (let i = 0; i < CONTAINER_READY_MAX_CHECKS; i += 1) {
+    if (onHeartbeat && i > 0) {
+      await onHeartbeat();
+    }
+
     const status = await getContainerStatus(creationId);
     const statusCode = status?.status_code;
 
@@ -691,12 +695,12 @@ export async function getPublishedMediaDetails(mediaId) {
   return data || null;
 }
 
-export async function publishPost(post) {
+export async function publishPost(post, onHeartbeat = null) {
   const preparedPost = await normalizeReelMedia(post);
   let { creationId, mediaUrl } = await createMediaContainer(preparedPost);
 
   try {
-    await waitForContainerReady(creationId, preparedPost.postType);
+    await waitForContainerReady(creationId, preparedPost.postType, onHeartbeat);
   } catch (error) {
     if (preparedPost.postType !== "reel" || !isInstagramProcessingFetchError(error)) {
       throw error;
@@ -705,6 +709,7 @@ export async function publishPost(post) {
     const token = String(preparedPost._id || Date.now()).replace(/[^a-zA-Z0-9_-]/g, "");
     console.warn(`[Instagram] Reel processing failed; trying mirror retry for ${String(mediaUrl || "").substring(0, 80)}`);
 
+    if (onHeartbeat) await onHeartbeat();
     const mirroredUrl = await mirrorMediaToPublicUrl(mediaUrl || preparedPost.mediaUrl, token);
     const retryPost = {
       ...toPlainPost(preparedPost),
@@ -712,11 +717,12 @@ export async function publishPost(post) {
       mediaUrl: mirroredUrl
     };
 
+    if (onHeartbeat) await onHeartbeat();
     const retry = await createMediaContainer(retryPost);
 
     creationId = retry.creationId;
     mediaUrl = retry.mediaUrl;
-    await waitForContainerReady(creationId, preparedPost.postType);
+    await waitForContainerReady(creationId, preparedPost.postType, onHeartbeat);
   }
 
   const publishId = await publishMedia(creationId);

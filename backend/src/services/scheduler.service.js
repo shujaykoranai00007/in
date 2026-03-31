@@ -3,7 +3,7 @@ import { publishPost } from "./instagram.service.js";
 import { cleanupPostLocalMedia } from "./media-cleanup.service.js";
 
 const MAX_RETRIES = 3;
-const PROCESSING_STALE_MINUTES = 20;
+const PROCESSING_STALE_MINUTES = 45;
 const REEL_WAIT_RETRY_MINUTES = 1;
 const RETRY_GAP_SECONDS = Math.max(15, Number(process.env.UPLOAD_RETRY_GAP_SECONDS) || 60);
 
@@ -82,7 +82,12 @@ function extractFailureMessage(error) {
 
 async function uploadOnce(post) {
   try {
-    const result = await publishPost(post);
+    // Pass a heartbeat callback to update updatedAt during long uploads
+    const result = await publishPost(post, async () => {
+      try {
+        await Post.updateOne({ _id: post._id }, { $set: { updatedAt: new Date() } });
+      } catch {}
+    });
     return { success: true, result };
   } catch (error) {
     if (isReelStillProcessingError(error)) {
@@ -100,8 +105,8 @@ async function recoverStaleProcessingPosts() {
     { status: "processing", updatedAt: { $lte: staleTime } },
     {
       $set: {
-        status: "failed",
-        errorLog: "Marked as failed: processing timeout"
+        status: "pending",
+        errorLog: "Automatically retrying after processing timeout"
       }
     }
   );
