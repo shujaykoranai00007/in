@@ -212,3 +212,25 @@ authRouter.get("/instagram-account-details", authMiddleware, async (_req, res) =
     });
   }
 });
+
+authRouter.delete("/instagram-media/:id", authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Attempt deletion via Graph API
+    await graphApi.delete(`/${id}`, {
+      params: {
+        access_token: env.instagramAccessToken
+      }
+    });
+
+    return res.status(200).json({ message: "Media deleted from Instagram successfully" });
+  } catch (error) {
+    const errorMsg = error.response?.data?.error?.message || error.message;
+    console.error("Instagram media deletion error:", errorMsg);
+    
+    return res.status(500).json({
+      message: errorMsg || "Failed to delete media from Instagram"
+    });
+  }
+});

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { Sparkles, ShieldCheck, User as UserIcon, Lock } from "lucide-react";
 
 export default function LoginView({ onLogin }) {
   const [form, setForm] = useState({ email: "", password: "" });
@@ -14,95 +15,88 @@ export default function LoginView({ onLogin }) {
     try {
       await onLogin(form.email, form.password);
     } catch (err) {
-      setError(err?.response?.data?.message || "Login failed");
+      setError(err?.response?.data?.message || "Authentication failed");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="min-h-screen bg-grid px-4 py-12 text-slate-800 md:py-16">
-      <div className="mx-auto max-w-6xl">
+    <div className="min-h-screen bg-white flex items-center justify-center px-6 py-12 text-slate-900" style={{ fontFamily: 'Inter, sans-serif' }}>
+      <div className="w-full max-w-md">
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
+          initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, ease: "easeOut" }}
-          className="glass-panel grid items-stretch gap-7 rounded-3xl p-6 md:grid-cols-[1.1fr_0.9fr] md:p-9"
+          transition={{ duration: 0.6, ease: "easeOut" }}
+          className="pro-card p-10 md:p-14 shadow-2xl relative overflow-hidden group"
         >
-          <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white/70 p-6 md:p-7">
-            <div className="space-y-5">
-              <p className="inline-flex rounded-full border border-cyan-400/30 bg-cyan-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-700">
-                Professional Publishing Suite
-              </p>
-              <h1 className="text-3xl font-bold leading-tight font-display md:text-4xl">
-                Plan, queue, and publish Instagram content with confidence
-              </h1>
-              <p className="text-sm text-muted">
-                Automa keeps your release cadence clean with scheduling controls, queue visibility, and resilient posting.
-              </p>
+          {/* Subtle background glow */}
+          <div className="absolute -top-24 -right-24 w-48 h-48 bg-cyan-50 blur-[80px] rounded-full opacity-50 group-hover:scale-150 transition-all duration-1000" />
+          
+          <div className="text-center mb-12 relative">
+            <div className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl text-white">
+               <Sparkles size={28} />
             </div>
-
-            <div className="mt-7 grid gap-3 text-xs text-slate-700 sm:grid-cols-2">
-              <div className="rounded-xl border border-slate-200 bg-white/80 px-3 py-3">
-                <p className="muted-text">Publishing Reliability</p>
-                <p className="mt-1 text-lg font-bold font-display">99.9%</p>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-white/80 px-3 py-3">
-                <p className="muted-text">Queue Visibility</p>
-                <p className="mt-1 text-lg font-bold font-display">Real-time</p>
-              </div>
-            </div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2, duration: 0.45 }}
-              className="mt-6 rounded-xl border border-slate-200 bg-white/85 px-4 py-3 text-xs text-slate-700"
-            >
-              <span className="text-cyan-700">Developed by</span> Jay Bhimani
-            </motion.div>
+            <p className="text-[10px] font-black uppercase tracking-[0.5em] text-cyan-700 italic mb-2">InstaFlow Pro • Professional Suite</p>
+            <h1 className="text-3xl font-black text-slate-950 italic uppercase tracking-tighter">SECURE <span className="text-slate-300">ACCESS</span></h1>
           </div>
 
-          <form className="space-y-4 rounded-2xl border border-slate-200 bg-white/85 p-5 md:p-6" onSubmit={handleSubmit}>
-            <p className="muted-text text-xs uppercase tracking-[0.18em]">Secure Sign In</p>
-            <h2 className="text-2xl font-bold font-display">Welcome Back</h2>
-
-            <label className="block text-sm text-muted">
-              Admin email
+          <form className="space-y-8 relative" onSubmit={handleSubmit}>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 ml-1">
+                 <UserIcon size={12} className="text-slate-400" />
+                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Access Email</label>
+              </div>
               <input
                 type="email"
                 required
                 value={form.email}
                 onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
-                className="field-base mt-2 w-full px-4 py-3 text-sm"
-                placeholder="name@company.com"
+                className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-[15px] font-bold focus:bg-white focus:ring-4 focus:ring-cyan-50 transition-all outline-none"
+                placeholder="admin@instaflow.pro"
               />
-            </label>
+            </div>
 
-            <label className="block text-sm text-muted">
-              Password
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 ml-1">
+                 <Lock size={12} className="text-slate-400" />
+                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">System Code</label>
+              </div>
               <input
                 type="password"
                 required
                 value={form.password}
                 onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
-                className="field-base mt-2 w-full px-4 py-3 text-sm"
-                placeholder="Enter your password"
+                className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-[15px] font-bold focus:bg-white focus:ring-4 focus:ring-cyan-50 transition-all outline-none"
+                placeholder="••••••••"
               />
-            </label>
+            </div>
 
-            {error && <p className="rounded-lg border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p>}
+            {error && (
+              <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="bg-rose-50 border border-rose-100 text-rose-600 px-6 py-4 rounded-xl text-[11px] font-bold uppercase tracking-tight text-center italic">
+                {error}
+              </motion.div>
+            )}
 
             <button
               type="submit"
               disabled={loading}
-              className="pro-btn w-full px-4 py-3 text-sm"
+              className="pro-btn-elite w-full py-5 text-[12px] font-black italic shadow-3xl"
             >
-              {loading ? "Signing in..." : "Open Dashboard"}
+              {loading ? "VERIFYING NODE..." : "INITIALIZE DASHBOARD"}
             </button>
-
-            <p className="muted-text text-center text-xs">Protected access for authorized admin users only.</p>
           </form>
+
+          {/* DEVELOPER ATTRIBUTION: JAY BHIMANI */}
+          <div className="mt-14 pt-8 border-t border-slate-50 text-center relative">
+             <div className="inline-flex items-center gap-3 px-6 py-2 bg-slate-900 border border-white shadow-xl rounded-full mb-4">
+                <ShieldCheck size={14} className="text-cyan-400" />
+                <span className="text-[9px] font-black text-white uppercase tracking-[0.2em]">Developed by Jay Bhimani</span>
+             </div>
+             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-relaxed">
+               Master UI/UX Specialist • v10.1 Stable
+             </p>
+          </div>
         </motion.div>
       </div>
     </div>

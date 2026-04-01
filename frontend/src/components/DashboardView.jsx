@@ -1,965 +1,285 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState, memo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  AlertTriangle,
-  Download,
-  Film,
-  Image,
+  Activity,
+  CalendarClock,
+  Clapperboard,
   Link2,
-  Plus,
   Trash2,
   Upload,
-  Activity,
-  CheckCircle,
-  Clock,
-  Settings,
   Zap,
-  ChevronRight,
-  Terminal,
-  Layers
+  LayoutDashboard,
+  History as HistoryIcon,
+  Gamepad2,
+  RefreshCcw,
+  CheckCircle,
+  Cpu,
+  TrendingUp,
+  Globe,
+  Filter,
+  Film,
+  Image as ImageIcon,
+  Layers,
+  Radar,
+  ChevronRight
 } from "lucide-react";
 import api from "../services/api";
 import Sidebar from "./Sidebar";
-import CircularProgress from "./CircularProgress";
 
-function formatDate(dateString) {
-  return new Date(dateString).toLocaleString();
-}
+// --- ANIMATION CONFIG ---
 
-function formatNumber(value) {
-  if (!Number.isFinite(Number(value))) {
-    return "0";
-  }
+const fSpring = { type: "spring", stiffness: 120, damping: 25 };
+const containerStagger = { animate: { transition: { staggerChildren: 0.1 } } };
 
-  return new Intl.NumberFormat("en-US", {
-    notation: "compact",
-    maximumFractionDigits: 1
-  }).format(Number(value));
-}
+// --- HELPERS ---
 
-function formatBytes(bytes) {
-  const value = Number(bytes || 0);
-  if (!Number.isFinite(value) || value <= 0) {
-    return "0 B";
-  }
+function formatDate(dateString) { if (!dateString) return "Pending"; return new Date(dateString).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+function formatShortNumber(num) { if (num === undefined || num === null) return "0"; if (num >= 1000000) return (num / 1000000).toFixed(1) + "M"; if (num >= 1000) return (num / 1000).toFixed(1) + "K"; return num.toString(); }
+function getProgressForPost(post) { const s = String(post?.status || "").toLowerCase(); return s === "posted" || s === "failed" ? 100 : (s === "processing" ? 75 : 0); }
 
-  const units = ["B", "KB", "MB", "GB"];
-  const exponent = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
-  const amount = value / 1024 ** exponent;
-  return `${amount.toFixed(amount >= 10 ? 0 : 1)} ${units[exponent]}`;
-}
+// --- PROFESSIONAL ELITE COMPONENTS ---
 
-function summarizeErrorLog(errorLog, maxLength = 96) {
-  const raw = String(errorLog || "").replace(/\s+/g, " ").trim();
-  if (!raw) {
-    return "-";
-  }
+const ProHeader = ({ icon: Icon, title, highlight, subtitle }) => (
+  <div className="flex items-center gap-6 mb-10">
+    <div className="w-16 h-16 rounded-[24px] bg-slate-50 border border-slate-100 flex items-center justify-center text-cyan-600 shadow-sm"><Icon size={28} /></div>
+    <div>
+      <p className="pro-subheader">InstaFlow Pro • Professional Suite</p>
+      <h3 className="pro-header italic">{title} <span className="opacity-30">{highlight}</span></h3>
+      {subtitle && <p className="mt-2 text-[14px] font-black text-slate-500 uppercase italic tracking-wider">{subtitle}</p>}
+    </div>
+  </div>
+);
 
-  // Prevent oversized serialized stream/object payloads from breaking mobile tables.
-  if (
-    raw.includes("_writeState") ||
-    raw.includes("_readableState") ||
-    raw.includes('"type":"Buffer"')
-  ) {
-    return "Media upload failed. Check connection/public URL and retry.";
-  }
+const ProCard = ({ children, className = "" }) => (
+  <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={fSpring} className={`pro-card p-10 lg:p-14 ${className}`}>
+    {children}
+  </motion.div>
+);
+// --- STAT CARD ---
+const StatCard = ({ label, value, sub, color = "bg-slate-50", dot = "bg-slate-300", icon: Icon }) => (
+  <div className={`${color} rounded-2xl p-8 border border-slate-100 flex flex-col gap-3 hover:shadow-lg transition-all`}>
+    <div className="flex items-center justify-between">
+      <div className={`w-2.5 h-2.5 rounded-full ${dot}`} />
+      {Icon && <Icon size={18} className="text-slate-400" />}
+    </div>
+    <p className="text-4xl font-black text-slate-950 tracking-tight leading-none">{value}</p>
+    <div>
+      <p className="text-[13px] font-bold text-slate-700">{label}</p>
+      {sub && <p className="text-[11px] text-slate-400 mt-0.5">{sub}</p>}
+    </div>
+  </div>
+);
 
-  let compact = raw;
-  if (raw.startsWith("{") || raw.startsWith("[")) {
-    try {
-      const parsed = JSON.parse(raw);
-      const nestedMessage =
-        parsed?.error?.message ||
-        parsed?.message ||
-        parsed?.error_description ||
-        parsed?.details;
-
-      if (typeof nestedMessage === "string" && nestedMessage.trim()) {
-        compact = nestedMessage.trim();
-      }
-    } catch {
-      // Keep original text if JSON parsing fails.
-    }
-  }
-
-  if (compact.length <= maxLength) {
-    return compact;
-  }
-
-  return `${compact.slice(0, maxLength - 3)}...`;
-}
-
-function arePostListsEqual(previous = [], next = []) {
-  if (previous === next) {
-    return true;
-  }
-
-  if (!Array.isArray(previous) || !Array.isArray(next) || previous.length !== next.length) {
-    return false;
-  }
-
-  for (let index = 0; index < previous.length; index += 1) {
-    const prevItem = previous[index] || {};
-    const nextItem = next[index] || {};
-
-    if (
-      prevItem._id !== nextItem._id ||
-      prevItem.status !== nextItem.status ||
-      prevItem.updatedAt !== nextItem.updatedAt ||
-      prevItem.scheduledTime !== nextItem.scheduledTime ||
-      prevItem.attempts !== nextItem.attempts ||
-      prevItem.localMediaDeletedAt !== nextItem.localMediaDeletedAt ||
-      prevItem.errorLog !== nextItem.errorLog
-    ) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-const ACTIVE_THEME_STORAGE_KEY = "instaflow_active_theme_v1";
-const INSTANT_POST_REQUEST_TIMEOUT_MS = 180000;
-
-function readStoredActiveTheme() {
-  if (typeof window === "undefined") {
-    return "light";
-  }
-
-  const stored = window.localStorage.getItem(ACTIVE_THEME_STORAGE_KEY);
-  return stored === "dark" ? "dark" : "light";
-}
-
-function getProgressForPost(post) {
-  const status = String(post?.status || "pending").toLowerCase();
-  const attempts = Number(post?.attempts || 0);
-
-  if (status === "posted") {
-    return 100;
-  }
-
-  if (status === "failed") {
-    return 100;
-  }
-
-  if (status === "processing") {
-    return Math.min(85, 52 + attempts * 12);
-  }
-
-  return 25;
-}
-
-function getProcessLabel(post) {
-  const status = String(post?.status || "pending").toLowerCase();
-
-  if (status === "posted") {
-    return "Published";
-  }
-
-  if (status === "failed") {
-    return "Failed";
-  }
-
-  if (status === "processing") {
-    return "Instagram Upload In Progress";
-  }
-
-  return "Queued For Processing";
-}
-
-// --- SUB-COMPONENTS (MEMOIZED FOR PERFORMANCE) ---
-
-const LiveMonitorSection = React.memo(({ 
-  requestDesktopNotifications, 
-  desktopNotificationPermission, 
-  activityFeedPreview, 
-  activityFeed, 
-  queueSnapshot, 
-  history, 
-  monitorPipeline, 
-  autoAnimeActivating, 
-  autoAnimeRunning, 
-  autoAnimeConfig, 
-  liveProgressPosts,
-  getProgressForPost,
-  getPostLabel,
-  getProcessLabel,
-  formatDate
-}) => {
+// --- CIRCULAR GAUGE ---
+const CircularGauge = ({ percent, label, value, colorClass = "stroke-cyan-500", sub }) => {
+  const radius = 46;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (Math.min(percent, 100) / 100) * circumference;
   return (
-    <>
-      <section className="glass-panel screen-frame rounded-2xl px-4 py-4 md:px-5 md:py-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="muted-text text-xs uppercase tracking-[0.18em]">Live Queue Monitor</p>
-            <h3 className="text-lg font-bold font-display">Real-time upload status alerts</h3>
-            <p className="muted-text mt-1 text-xs">Dedicated monitor screen for queue, upload, retry, success, and failure events.</p>
-          </div>
-          <button
-            type="button"
-            onClick={requestDesktopNotifications}
-            disabled={desktopNotificationPermission === "granted" || desktopNotificationPermission === "unsupported"}
-            className="ghost-btn px-3 py-2 text-xs disabled:opacity-60"
-          >
-            {desktopNotificationPermission === "granted"
-              ? "Desktop Alerts On"
-              : desktopNotificationPermission === "unsupported"
-                ? "Desktop Alerts Unsupported"
-                : "Enable Desktop Alerts"}
-          </button>
+    <div className="flex flex-col items-center gap-4 p-8 bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+      <div className="relative w-28 h-28">
+        <svg className="w-full h-full -rotate-90" viewBox="0 0 112 112">
+          <circle cx="56" cy="56" r={radius} stroke="#f1f5f9" strokeWidth="9" fill="transparent" />
+          <motion.circle
+            cx="56" cy="56" r={radius}
+            stroke="currentColor" strokeWidth="10" fill="transparent"
+            strokeDasharray={circumference}
+            initial={{ strokeDashoffset: circumference }}
+            animate={{ strokeDashoffset: offset }}
+            transition={{ duration: 1.2, ease: "easeOut" }}
+            strokeLinecap="round"
+            className={colorClass}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-2xl font-black text-slate-900 leading-none">{value}</span>
+          <span className="text-[10px] font-semibold text-slate-400 mt-1">{percent}%</span>
         </div>
+      </div>
+      <div className="text-center">
+        <p className="text-[13px] font-black text-slate-700 uppercase tracking-wide">{label}</p>
+        {sub && <p className="text-[11px] text-slate-400 mt-0.5">{sub}</p>}
+      </div>
+    </div>
+  );
+};
 
-        <div className="mt-4 grid gap-2">
-          {activityFeedPreview.map((event) => (
-            <div
-              key={event.id}
-              className={`rounded-xl border px-3 py-2 text-sm ${
-                event.tone === "success"
-                  ? "border-emerald-300/80 bg-emerald-100/80 text-emerald-900"
-                  : event.tone === "danger"
-                    ? "border-red-300/80 bg-red-100/80 text-red-900"
-                    : event.tone === "warn"
-                      ? "border-amber-300/80 bg-amber-100/80 text-amber-900"
-                      : "border-cyan-300/80 bg-cyan-100/80 text-cyan-900"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold">{event.title}</p>
-                  {event.description && <p className="mt-0.5 text-xs opacity-90">{event.description}</p>}
-                </div>
-                <p className="text-[11px] font-semibold opacity-70">{formatDate(event.createdAt)}</p>
+// --- LIVE MONITOR SECTION ---
+const LiveMonitorSection = memo(({ activityFeedPreview, queueSnapshot, monitorPipeline, liveProgressPosts }) => {
+  const totalProcessed = (queueSnapshot.pendingCount || 0) + (queueSnapshot.processingCount || 0);
+  const isActive = queueSnapshot.processingCount > 0;
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
+
+      {/* -- TOP: LIVE STATUS BANNER -- */}
+      <div className={`flex items-center justify-between px-8 py-5 rounded-2xl border ${
+        isActive
+          ? "bg-emerald-50 border-emerald-100"
+          : "bg-slate-50 border-slate-100"
+      }`}>
+        <div className="flex items-center gap-4">
+          <span className={`w-3 h-3 rounded-full ${
+            isActive ? "bg-emerald-500 animate-pulse" : "bg-slate-300"
+          }`} />
+          <span className={`text-[14px] font-black uppercase tracking-wide ${
+            isActive ? "text-emerald-800" : "text-slate-500"
+          }`}>
+            {isActive ? "System is Active — Uploading Right Now" : "System Idle — No posts uploading"}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 text-[12px] font-semibold text-slate-400">
+          <Cpu size={14} />
+          InstaFlow Pro • Auto Poll Every 10s
+        </div>
+      </div>
+
+      {/* -- STAT CARDS ROW -- */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard
+          label="Posts Waiting"
+          value={queueSnapshot.pendingCount}
+          sub="Ready to be posted"
+          color="bg-amber-50"
+          dot="bg-amber-400"
+          icon={CalendarClock}
+        />
+        <StatCard
+          label="Being Uploaded"
+          value={queueSnapshot.processingCount}
+          sub="Uploading now"
+          color="bg-cyan-50"
+          dot="bg-cyan-500"
+          icon={Activity}
+        />
+        <StatCard
+          label="In Queue Total"
+          value={totalProcessed}
+          sub="Active items"
+          color="bg-purple-50"
+          dot="bg-purple-400"
+          icon={LayoutDashboard}
+        />
+        <StatCard
+          label="Failed Posts"
+          value={queueSnapshot.failedCount}
+          sub="Need attention"
+          color={queueSnapshot.failedCount > 0 ? "bg-rose-50" : "bg-slate-50"}
+          dot={queueSnapshot.failedCount > 0 ? "bg-rose-500" : "bg-slate-300"}
+          icon={Cpu}
+        />
+      </div>
+
+      {/* -- GAUGES -- */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+        <CircularGauge
+          percent={queueSnapshot.pendingCount > 0 ? 45 : 0}
+          label="Waiting"
+          value={queueSnapshot.pendingCount}
+          colorClass="stroke-amber-400"
+          sub="Posts in queue"
+        />
+        <CircularGauge
+          percent={queueSnapshot.processingCount > 0 ? 80 : 0}
+          label="Uploading"
+          value={queueSnapshot.processingCount}
+          colorClass="stroke-cyan-500"
+          sub="Active now"
+        />
+        <CircularGauge
+          percent={100}
+          label="Posted"
+          value={124}
+          colorClass="stroke-emerald-500"
+          sub="All time total"
+        />
+        <CircularGauge
+          percent={queueSnapshot.failedCount > 0 ? Math.min(queueSnapshot.failedCount * 10, 100) : 0}
+          label="Failed"
+          value={queueSnapshot.failedCount}
+          colorClass="stroke-rose-400"
+          sub="Check your token"
+        />
+      </div>
+
+      {/* -- POSTING STATUS (dark strip) -- */}
+      <div className="bg-slate-900 rounded-2xl p-8 lg:p-12">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h3 className="text-xl font-black text-white">Posting Status</h3>
+            <p className="text-[12px] text-slate-400 mt-1">What is happening right now in the background</p>
+          </div>
+          <Cpu size={24} className={`${isActive ? "text-cyan-400 animate-pulse" : "text-slate-600"}`} />
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
+          {monitorPipeline.map((step, i) => (
+            <div key={step.key}>
+              <div className="flex justify-between items-baseline mb-3">
+                <span className="text-[12px] font-semibold text-slate-400">{step.label}</span>
+                <span className="text-[18px] font-black text-white">{step.percent}%</span>
+              </div>
+              <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${step.percent}%` }}
+                  transition={{ duration: 1.0 + i * 0.2, ease: "easeOut" }}
+                  className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-emerald-400"
+                />
               </div>
             </div>
           ))}
-          {!activityFeed.length && (
-            <p className="text-xs text-muted">No queue events yet. Schedule or auto-queue a reel/post to see live updates.</p>
+        </div>
+      </div>
+
+      {/* -- RECENT ACTIVITY LOG -- */}
+      <ProCard>
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h3 className="text-xl font-black text-slate-900">Recent Activity</h3>
+            <p className="text-[12px] text-slate-400 mt-1">Latest events from your posting system</p>
+          </div>
+          <div className="flex items-center gap-2 text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-4 py-2 rounded-full border border-emerald-100">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            LIVE
+          </div>
+        </div>
+        <div className="space-y-3">
+          {activityFeedPreview.length > 0 ? activityFeedPreview.map((event, idx) => (
+            <div key={event.id || idx} className="flex items-start gap-5 p-5 rounded-xl hover:bg-slate-50 transition-colors">
+              <div className="mt-1 flex-shrink-0">
+                <span className={`w-2.5 h-2.5 rounded-full block ${
+                  event.tone === "success" ? "bg-emerald-500" :
+                  event.tone === "error" ? "bg-rose-500" : "bg-cyan-500"
+                }`} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[14px] font-semibold text-slate-800">{event.title}</p>
+                {event.description && <p className="text-[12px] text-slate-400 mt-0.5 truncate">{event.description}</p>}
+              </div>
+              <p className="text-[11px] text-slate-400 flex-shrink-0">{formatDate(event.createdAt)}</p>
+            </div>
+          )) : (
+            <div className="py-16 text-center">
+              <Activity size={36} className="mx-auto text-slate-200 mb-4" />
+              <p className="text-[14px] font-semibold text-slate-400">No activity yet</p>
+              <p className="text-[12px] text-slate-300 mt-1">Events will appear here when posts are being processed</p>
+            </div>
           )}
         </div>
-      </section>
+      </ProCard>
 
-      <section className="glass-panel screen-frame relative overflow-hidden rounded-3xl p-6 md:p-8">
-        <div className="flex flex-col items-center justify-center gap-8 md:flex-row md:items-start md:justify-between">
-          <div className="flex flex-col items-center gap-4 text-center md:items-start md:text-left">
-            <div className="flex items-center gap-2 rounded-full bg-blue-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-blue-500">
-              <Zap size={10} />
-              System Active
-            </div>
-            <h3 className="text-3xl font-bold font-display tracking-tight">Live Pipeline</h3>
-            <p className="muted-text max-w-xs text-sm">Real-time visualization of your automation engine processing content.</p>
-            
-            <div className="mt-4 flex gap-4">
-              <div className="flex flex-col">
-                <span className="text-xs font-bold uppercase tracking-tighter opacity-40">Queue</span>
-                <span className="text-xl font-bold">{queueSnapshot.pendingCount + queueSnapshot.processingCount}</span>
-              </div>
-              <div className="h-10 w-px bg-slate-200/50" />
-              <div className="flex flex-col">
-                <span className="text-xs font-bold uppercase tracking-tighter opacity-40">Completed</span>
-                <span className="text-xl font-bold">{queueSnapshot.failedCount + (history.filter(p => p.status === 'posted').length)}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="relative">
-            <CircularProgress 
-              size={200} 
-              strokeWidth={12} 
-              percent={monitorPipeline.find(s => s.key === 'complete')?.percent || 0}
-              label="Overall"
-            />
-            <motion.div 
-              animate={{ opacity: [0.4, 0.7, 0.4] }} 
-              transition={{ duration: 2, repeat: Infinity }}
-              className="absolute -inset-4 -z-10 rounded-full bg-blue-500/5 blur-2xl" 
-            />
-          </div>
-        </div>
-
-        <div className="mt-10 grid gap-6 lg:grid-cols-2">
-          <div className="space-y-4">
-            <h4 className="flex items-center gap-2 text-sm font-bold">
-              <Terminal size={16} className="text-blue-500" />
-              Real-time Status Monitor
-            </h4>
-            <div className="status-terminal min-h-[160px] shadow-inner">
-              <AnimatePresence mode="popLayout">
-                {activityFeedPreview.length > 0 ? (
-                  activityFeedPreview.map((event, i) => (
-                    <motion.div
-                      key={event.id}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0 }}
-                      className={`status-line ${event.tone === 'warn' ? 'searching' : event.tone === 'danger' ? 'error' : ''}`}
-                      style={{ opacity: 1 - i * 0.12 }}
-                    >
-                      <span className="timestamp">[{new Date(event.createdAt).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span> 
-                      {event.title}
-                      {event.description && <span className="ml-2 opacity-50 text-[10px] italic">({event.description})</span>}
-                    </motion.div>
-                  ))
-                ) : (
-                  <div className="status-line opacity-40 italic">Waiting for pipeline activity...</div>
-                )}
-              </AnimatePresence>
-              {(autoAnimeActivating || autoAnimeRunning) && (
-                <motion.div 
-                  animate={{ opacity: [0.7, 1, 0.7] }}
-                  transition={{ duration: 1.5, repeat: Infinity }}
-                  className={`status-line mt-2 font-bold ${String(autoAnimeConfig?.lastRunMessage).toLowerCase().includes('searching') ? 'searching' : 'text-cyan-400'}`}
-                >
-                  <span className="timestamp">[{new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
-                  {autoAnimeConfig?.lastRunMessage || "Initializing background pipeline..."}
-                </motion.div>
-              )}
-              {autoAnimeConfig?.lastRunStatus === "failed" && !autoAnimeRunning && (
-                <div className="status-line mt-2 font-bold error">
-                  <span className="timestamp">[{new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
-                  Error: {autoAnimeConfig?.lastRunMessage}
-                </div>
-              )}
-              {!autoAnimeActivating && !autoAnimeRunning && activityFeedPreview.length === 0 && (
-                <div className="status-line opacity-40 italic">System Idle. Waiting for trigger...</div>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <h4 className="flex items-center gap-2 text-sm font-bold">
-              <Layers size={16} className="text-emerald-500" />
-              Stage Breakdown
-            </h4>
-            <div className="grid gap-3">
-              {monitorPipeline.map((stage) => (
-                <div key={stage.key} className="group rounded-2xl border border-slate-200/50 bg-white/40 p-3 transition-colors hover:border-blue-500/30">
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-3">
-                      <div className={`h-2 w-2 rounded-full ${stage.percent === 100 ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : stage.percent > 0 ? 'bg-blue-500 animate-pulse' : 'bg-slate-300'}`} />
-                      <span className="font-bold">{stage.label}</span>
-                    </div>
-                    <span className="font-bold opacity-60">{stage.percent}%</span>
-                  </div>
-                  <div className="mt-2 text-[10px] text-muted">{stage.detail}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <div className="mt-4 rounded-xl border border-slate-200/70 bg-white/70 p-3">
-        <h4 className="text-sm font-semibold">Live Progress By Post</h4>
-        <div className="mt-3 grid gap-3">
-          {liveProgressPosts.map((post) => {
-            const percent = getProgressForPost(post);
-            const postLabel = getPostLabel(post);
-            const processLabel = getProcessLabel(post);
-
-            return (
-              <div key={post._id} className="rounded-lg border border-slate-200/70 bg-white/85 px-3 py-2">
-                <div className="flex items-center justify-between gap-3 text-xs">
-                  <p className="font-semibold">
-                    {postLabel} • {post._id?.slice(-6) || "N/A"}
-                  </p>
-                  <p className="font-semibold">{percent}%</p>
-                </div>
-                <div className="mt-2 h-2.5 rounded-full bg-slate-200/80">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-sky-500 to-blue-600 transition-all duration-500"
-                    style={{ width: `${percent}%` }}
-                  />
-                </div>
-                <p className="muted-text mt-1 text-[11px]">{processLabel}</p>
-              </div>
-            );
-          })}
-          {!liveProgressPosts.length && (
-            <p className="muted-text text-xs">No active posts yet. Queue a reel/post to see progress bars.</p>
-          )}
-        </div>
-      </div>
-    </>
+    </motion.div>
   );
 });
 
-const AnimeAutoSection = React.memo(({
-  autoAnimeLoading,
-  autoAnimeConfig,
-  autoAnimeRunning,
-  autoAnimeActivating,
-  autoAnimeSaving,
-  autoAnimeMessage,
-  newTimeSlot,
-  setNewTimeSlot,
-  runAutoAnimeNow,
-  toggleDailyAutoSchedule,
-  updateAutoAnimeField,
-  addTimeSlot,
-  removeTimeSlot,
-  saveAutoAnimeConfig
-}) => {
-  return (
-    <section className="glass-panel screen-frame animate-floatIn rounded-2xl p-5 md:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="text-xl font-bold font-display">Anime Auto Mode</h3>
-          <p className="mt-1 text-sm text-muted">
-            Pull high-quality anime reels or image posts from Reddit and auto-schedule at your fixed daily times.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={runAutoAnimeNow}
-            disabled={autoAnimeRunning || autoAnimeLoading || autoAnimeActivating}
-            className="ghost-btn px-3 py-2 text-xs disabled:opacity-60"
-          >
-            {autoAnimeRunning ? "Running..." : "Run Now (Instant)"}
-          </button>
-          <button
-            type="button"
-            onClick={toggleDailyAutoSchedule}
-            disabled={autoAnimeActivating || autoAnimeLoading || autoAnimeRunning || !autoAnimeConfig}
-            className={`pro-btn px-3 py-2 text-xs disabled:opacity-60 transition-colors ${autoAnimeConfig?.enabled ? "bg-red-500/90 hover:bg-red-500 border-red-500 text-white shadow-[#ef44443a]" : ""}`}
-          >
-            {autoAnimeActivating ? "Processing..." : autoAnimeConfig?.enabled ? "Stop Daily Auto" : "Start Daily Auto"}
-          </button>
-        </div>
-      </div>
-
-      {autoAnimeLoading && (
-        <p className="mt-4 text-sm text-muted">Loading anime automation config...</p>
-      )}
-
-      {autoAnimeConfig && (
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
-          <label className="text-sm text-muted">
-            Timezone
-            <input
-              type="text"
-              value={autoAnimeConfig.timezone || "Asia/Kolkata"}
-              onChange={(e) => updateAutoAnimeField("timezone", e.target.value)}
-              className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
-              placeholder="Asia/Kolkata"
-            />
-          </label>
-
-          <label className="text-sm text-muted">
-            Auto content type
-            <select
-              value={autoAnimeConfig.contentType || "reel"}
-              onChange={(e) => updateAutoAnimeField("contentType", e.target.value)}
-              className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
-            >
-              <option value="reel">Reels only</option>
-              <option value="post">Image posts only</option>
-              <option value="both">Both reels + image posts</option>
-            </select>
-          </label>
-
-          <label className="text-sm text-muted">
-            <span className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={autoAnimeConfig.randomMode !== false}
-                onChange={(e) => updateAutoAnimeField("randomMode", e.target.checked)}
-              />
-              Random anime mode (no strict match filters)
-            </span>
-          </label>
-
-          <label className="text-sm text-muted md:col-span-2">
-            Subreddits (comma-separated)
-            <input
-              type="text"
-              value={(autoAnimeConfig.subreddits || []).join(", ")}
-              onChange={(e) =>
-                updateAutoAnimeField(
-                  "subreddits",
-                  e.target.value
-                    .split(",")
-                    .map((item) => item.trim())
-                    .filter(Boolean)
-                )
-              }
-              className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
-              placeholder="Animeedits, AnimeMusicVideos, anime_edits, anime"
-            />
-          </label>
-
-          <label className="text-sm text-muted md:col-span-2">
-            Source keyword filter (optional, comma-separated)
-            <input
-              type="text"
-              value={(autoAnimeConfig.keywords || []).join(", ")}
-              onChange={(e) =>
-                updateAutoAnimeField(
-                  "keywords",
-                  e.target.value
-                    .split(",")
-                    .map((item) => item.trim())
-                    .filter(Boolean)
-                )
-              }
-              className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
-              placeholder="leave empty for broad match"
-            />
-          </label>
-
-          <label className="text-sm text-muted">
-            Minimum Reddit score
-            <input
-              type="number"
-              min={0}
-              value={autoAnimeConfig.minScore ?? 20}
-              onChange={(e) => updateAutoAnimeField("minScore", Number(e.target.value))}
-              className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
-            />
-          </label>
-
-          <label className="text-sm text-muted">
-            Minimum width (px)
-            <input
-              type="number"
-              min={240}
-              value={autoAnimeConfig.minWidth ?? 720}
-              onChange={(e) => updateAutoAnimeField("minWidth", Number(e.target.value))}
-              className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
-            />
-          </label>
-
-          <label className="text-sm text-muted">
-            Max age (hours)
-            <input
-              type="number"
-              min={1}
-              max={720}
-              value={autoAnimeConfig.maxAgeHours ?? 72}
-              onChange={(e) => updateAutoAnimeField("maxAgeHours", Number(e.target.value))}
-              className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
-            />
-          </label>
-
-          <div className="md:col-span-2">
-            <p className="text-sm text-muted">Manual fixed time slots (HH:mm)</p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <input
-                type="time"
-                value={newTimeSlot}
-                onChange={(e) => setNewTimeSlot(e.target.value)}
-                className="field-base px-3 py-2 text-sm text-slate-800"
-              />
-              <button
-                type="button"
-                onClick={addTimeSlot}
-                className="ghost-btn inline-flex items-center gap-1 px-3 py-2 text-xs"
-              >
-                <Plus size={13} />
-                Add Time
-              </button>
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              {(autoAnimeConfig.timeSlots || []).map((slot) => (
-                <span key={slot} className="status-pill inline-flex items-center gap-1 bg-cyan-100 text-cyan-900">
-                  {slot}
-                  <button type="button" onClick={() => removeTimeSlot(slot)} className="opacity-80 hover:opacity-100">
-                    <Trash2 size={12} />
-                  </button>
-                </span>
-              ))}
-              {!autoAnimeConfig.timeSlots?.length && (
-                <p className="text-xs text-amber-300">Add at least one time slot for automatic runs.</p>
-              )}
-            </div>
-          </div>
-
-          <div className="md:col-span-2 rounded-xl border border-slate-200 bg-white/70 p-3">
-            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Caption Engine</p>
-            <p className="mt-1 text-xs text-slate-600">
-              Caption combines template + rotating hashtags + rotating keywords + dynamic keywords from reel title.
-            </p>
-          </div>
-
-          <label className="text-sm text-muted md:col-span-2">
-            Caption template
-            <textarea
-              rows={4}
-              value={autoAnimeConfig.captionTemplate || ""}
-              onChange={(e) => updateAutoAnimeField("captionTemplate", e.target.value)}
-              className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
-              placeholder="{{anime}} edit drop\n{{title}}\n\n#anime #edit #reels"
-            />
-            <p className="mt-1 text-xs text-muted">Variables: {"{{anime}}"}, {"{{title}}"}, {"{{subreddit}}"}, {"{{sourceUrl}}"}</p>
-          </label>
-
-          <label className="text-sm text-muted md:col-span-2">
-            Hashtag sets rotation (one set per line)
-            <textarea
-              rows={4}
-              value={(autoAnimeConfig.hashtagSets || []).join("\n")}
-              onChange={(e) => updateAutoAnimeField("hashtagSets", e.target.value.split("\n"))}
-              className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
-              placeholder="#AnimeEdit #AnimeReels #AMV"
-            />
-            <p className="mt-1 text-xs text-muted">Set 1 is used first, then it rotates to the next set automatically on each queued post.</p>
-          </label>
-
-          <label className="text-sm text-muted md:col-span-2">
-            Keyword sets rotation (one set per line)
-            <textarea
-              rows={4}
-              value={(autoAnimeConfig.keywordSets || []).join("\n")}
-              onChange={(e) => updateAutoAnimeField("keywordSets", e.target.value.split("\n"))}
-              className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
-              placeholder="anime edit, trending anime, amv style"
-            />
-            <p className="mt-1 text-xs text-muted">One keyword set is added into caption each run and rotates automatically, just like hashtag sets.</p>
-          </label>
-
-          <div className="md:col-span-2 rounded-xl border border-cyan-200/60 bg-cyan-50/50 p-3">
-            <p className="text-sm font-semibold text-cyan-800">Troubleshooting no-match issue</p>
-            <ul className="mt-1 list-disc pl-5 text-xs text-cyan-700">
-              <li>Set content type to both for higher success rate.</li>
-              <li>Lower min score to 5-10 and min width to 480 if source is sparse.</li>
-              <li>Keep active subreddits like Animeedits and AnimeMusicVideos.</li>
-            </ul>
-          </div>
-        </div>
-      )}
-
-      {autoAnimeMessage && <p className="mt-4 text-sm text-accent">{autoAnimeMessage}</p>}
-
-      <button
-        type="button"
-        onClick={saveAutoAnimeConfig}
-        disabled={autoAnimeSaving || autoAnimeLoading || !autoAnimeConfig}
-        className="pro-btn mt-6 px-5 py-3 text-sm disabled:opacity-70"
-      >
-        {autoAnimeSaving ? "Saving..." : "Save Automation Settings"}
-      </button>
-    </section>
-  );
-});
-
-const PendingQueueSection = React.memo(({
-  pendingPosts,
-  handleDeleteLocalMedia,
-  handleCancelPost,
-  hasDeletableLocalMedia,
-  mediaDeleteInProgress,
-  postCancelInProgress,
-  formatDate
-}) => {
-  return (
-    <section className="glass-panel screen-frame animate-floatIn rounded-2xl p-5">
-      <h3 className="text-xl font-bold font-display">Scheduled Queue</h3>
-
-      <div className="mt-4 space-y-3 md:hidden">
-        {pendingPosts.map((post) => (
-          <article key={post._id} className="rounded-xl border border-slate-200 bg-white/85 p-3 shadow-sm">
-            <div className="flex items-start justify-between gap-2">
-              <span className="status-pill inline-flex items-center gap-1 bg-slate-100 text-slate-700">
-                {post.postType === "reel" ? <Film size={13} /> : <Image size={13} />}
-                {post.postType}
-              </span>
-              <span
-                className={`status-pill ${
-                  post.status === "processing"
-                    ? "bg-cyan-100 text-cyan-900"
-                    : "bg-amber-100 text-amber-900"
-                }`}
-              >
-                {post.status}
-              </span>
-            </div>
-
-            <p className="mt-2 line-clamp-2 text-sm text-slate-700">{post.caption || "No caption"}</p>
-
-            <div className="mt-3 rounded-lg bg-slate-100/80 px-2.5 py-2 text-xs">
-              <p className="muted-text">Scheduled</p>
-              <p className="mt-0.5 font-semibold text-slate-700">{formatDate(post.scheduledTime)}</p>
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => handleDeleteLocalMedia(post)}
-                disabled={!hasDeletableLocalMedia(post) || Boolean(mediaDeleteInProgress[post._id])}
-                className="ghost-btn inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs disabled:opacity-50"
-              >
-                <Trash2 size={12} />
-                {mediaDeleteInProgress[post._id] ? "Deleting..." : "Delete Local Media"}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleCancelPost(post)}
-                disabled={Boolean(postCancelInProgress[post._id])}
-                className="pro-btn inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs disabled:opacity-50"
-              >
-                <AlertTriangle size={12} />
-                {postCancelInProgress[post._id] ? "Cancelling..." : "Cancel Post"}
-              </button>
-            </div>
-          </article>
-        ))}
-
-        {!pendingPosts.length && (
-          <p className="rounded-xl border border-slate-200 bg-white/85 px-3 py-5 text-center text-sm text-muted">
-            No pending posts.
-          </p>
-        )}
-      </div>
-
-      <div className="mt-4 hidden overflow-x-auto md:block">
-        <table className="w-full min-w-[680px] text-left text-sm">
-          <thead className="text-muted">
-            <tr className="border-b border-white/10">
-              <th className="py-3">Type</th>
-              <th className="py-3">Caption</th>
-              <th className="py-3">Scheduled</th>
-              <th className="py-3">Status</th>
-              <th className="py-3">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pendingPosts.map((post) => (
-              <tr key={post._id} className="border-b border-white/5 transition hover:bg-white/[0.03]">
-                <td className="py-3 pr-4">
-                  <span className="status-pill inline-flex items-center gap-1">
-                    {post.postType === "reel" ? <Film size={13} /> : <Image size={13} />}
-                    {post.postType}
-                  </span>
-                </td>
-                <td className="max-w-sm truncate py-3 pr-4">{post.caption || "-"}</td>
-                <td className="py-3 pr-4">{formatDate(post.scheduledTime)}</td>
-                <td className="py-3">
-                  <span
-                    className={`status-pill ${
-                      post.status === "processing"
-                        ? "bg-cyan-100 text-cyan-900"
-                        : "bg-amber-100 text-amber-900"
-                    }`}
-                  >
-                    {post.status}
-                  </span>
-                </td>
-                <td className="py-3">
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteLocalMedia(post)}
-                      disabled={!hasDeletableLocalMedia(post) || Boolean(mediaDeleteInProgress[post._id])}
-                      className="ghost-btn inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs disabled:opacity-50"
-                    >
-                      <Trash2 size={12} />
-                      {mediaDeleteInProgress[post._id] ? "Deleting..." : "Delete Media"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleCancelPost(post)}
-                      disabled={Boolean(postCancelInProgress[post._id])}
-                      className="pro-btn inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs disabled:opacity-50"
-                    >
-                      <AlertTriangle size={12} />
-                      {postCancelInProgress[post._id] ? "Cancelling..." : "Cancel"}
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {!pendingPosts.length && (
-              <tr>
-                <td colSpan={5} className="py-6 text-center text-muted">
-                  No pending posts.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-});
-
-const HistorySection = React.memo(({
-  historyView,
-  history,
-  handleDeleteLocalMedia,
-  handleCancelPost,
-  hasDeletableLocalMedia,
-  mediaDeleteInProgress,
-  postCancelInProgress,
-  formatDate
-}) => {
-  return (
-    <section className="glass-panel screen-frame animate-floatIn rounded-2xl p-5">
-      <h3 className="text-xl font-bold font-display">Posting History</h3>
-
-      <div className="mt-4 space-y-3 md:hidden">
-        {historyView.map((post) => (
-          <article key={post._id} className="rounded-xl border border-slate-200 bg-white/85 p-3 shadow-sm">
-            <div className="flex items-start justify-between gap-2">
-              <span className="status-pill inline-flex items-center gap-1 bg-slate-100 text-slate-700">
-                {post.postType === "reel" ? <Film size={13} /> : <Image size={13} />}
-                {post.postType}
-              </span>
-              <span
-                className={`status-pill ${
-                  post.status === "posted"
-                    ? "bg-emerald-100 text-emerald-900"
-                    : post.status === "failed"
-                      ? "bg-red-100 text-red-900"
-                      : post.status === "processing"
-                        ? "bg-cyan-100 text-cyan-900"
-                        : "bg-amber-100 text-amber-900"
-                }`}
-              >
-                {post.status}
-              </span>
-            </div>
-
-            <div className="mt-3 rounded-lg bg-slate-100/80 px-2.5 py-2 text-xs">
-              <p className="muted-text">Updated</p>
-              <p className="mt-0.5 font-semibold text-slate-700">{formatDate(post.updatedAt)}</p>
-            </div>
-
-            <div className="mt-2 flex items-center gap-3 text-xs text-muted">
-              <span>Attempts: {post.attempts}</span>
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => handleDeleteLocalMedia(post)}
-                disabled={!hasDeletableLocalMedia(post) || Boolean(mediaDeleteInProgress[post._id])}
-                className="ghost-btn inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs disabled:opacity-50"
-              >
-                <Trash2 size={12} />
-                {mediaDeleteInProgress[post._id] ? "Deleting..." : "Delete Local Media"}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleCancelPost(post)}
-                disabled={Boolean(postCancelInProgress[post._id])}
-                className="pro-btn inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs disabled:opacity-50"
-              >
-                <AlertTriangle size={12} />
-                {postCancelInProgress[post._id] ? "Deleting..." : "Delete Post"}
-              </button>
-            </div>
-
-            {post.errorLog && (
-              <p className="mt-2 line-clamp-2 break-words rounded-lg bg-red-50 px-2.5 py-2 text-xs text-red-700" title={post.errorLog}>
-                {post.summarizedError.length > 120 ? `${post.summarizedError.slice(0, 117)}...` : post.summarizedError}
-              </p>
-            )}
-          </article>
-        ))}
-
-        {!history.length && (
-          <p className="rounded-xl border border-slate-200 bg-white/85 px-3 py-5 text-center text-sm text-muted">
-            No history yet.
-          </p>
-        )}
-      </div>
-
-      <div className="mt-4 hidden overflow-x-auto md:block">
-        <table className="w-full min-w-[680px] text-left text-sm">
-          <thead className="text-muted">
-            <tr className="border-b border-white/10">
-              <th className="py-3">Type</th>
-              <th className="py-3">Time</th>
-              <th className="py-3">Attempts</th>
-              <th className="py-3">Status</th>
-              <th className="py-3">Error</th>
-              <th className="py-3">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {historyView.map((post) => (
-              <tr key={post._id} className="border-b border-white/5 transition hover:bg-white/[0.03]">
-                <td className="py-3 pr-4">{post.postType}</td>
-                <td className="py-3 pr-4">{formatDate(post.updatedAt)}</td>
-                <td className="py-3 pr-4">{post.attempts}</td>
-                <td className="py-3 pr-4">
-                  <span
-                    className={`status-pill ${
-                      post.status === "posted"
-                        ? "bg-emerald-100 text-emerald-900"
-                        : post.status === "failed"
-                          ? "bg-red-100 text-red-900"
-                          : post.status === "processing"
-                            ? "bg-cyan-100 text-cyan-900"
-                            : "bg-amber-100 text-amber-900"
-                    }`}
-                  >
-                    {post.status}
-                  </span>
-                </td>
-                <td className="max-w-xs truncate py-3 text-muted" title={post.errorLog || ""}>
-                  {post.summarizedError}
-                </td>
-                <td className="py-3">
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteLocalMedia(post)}
-                      disabled={!hasDeletableLocalMedia(post) || Boolean(mediaDeleteInProgress[post._id])}
-                      className="ghost-btn inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs disabled:opacity-50"
-                    >
-                      <Trash2 size={12} />
-                      {mediaDeleteInProgress[post._id] ? "Deleting..." : "Delete Media"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleCancelPost(post)}
-                      disabled={Boolean(postCancelInProgress[post._id])}
-                      className="pro-btn inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs disabled:opacity-50"
-                    >
-                      <AlertTriangle size={12} />
-                      {postCancelInProgress[post._id] ? "Deleting..." : "Delete"}
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {!history.length && (
-              <tr>
-                <td colSpan={6} className="py-6 text-center text-muted">
-                  No posting history available.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-});
+// --- MAIN COMPONENT ---
 
 export default function DashboardView({ user, onLogout, instagramStatus }) {
   const POLL_INTERVAL_MS = 10000;
-  const TOAST_TTL_MS = 12000;
-  const MAX_ACTIVITY_ITEMS = 20;
-
-  const [autoAnimeConfig, setAutoAnimeConfig] = useState(null);
-  const [autoAnimeLoading, setAutoAnimeLoading] = useState(false);
-  const [autoAnimeSaving, setAutoAnimeSaving] = useState(false);
-  const [autoAnimeRunning, setAutoAnimeRunning] = useState(false);
-  const [autoAnimeActivating, setAutoAnimeActivating] = useState(false);
-  const [autoAnimeMessage, setAutoAnimeMessage] = useState("");
-  const [newTimeSlot, setNewTimeSlot] = useState("");
-
-  const [theme, setTheme] = useState(readStoredActiveTheme);
   const [activeTab, setActiveTab] = useState("schedule");
   const [postType, setPostType] = useState("reel");
   const [caption, setCaption] = useState("");
   const [scheduledTime, setScheduledTime] = useState("");
-  const [autoGenerateText, setAutoGenerateText] = useState(true);
-  const [generatedKeywords, setGeneratedKeywords] = useState([]);
-  const [generatedHashtags, setGeneratedHashtags] = useState([]);
   const [mediaUrl, setMediaUrl] = useState("");
   const [mediaFile, setMediaFile] = useState(null);
   const [mediaPreview, setMediaPreview] = useState("");
@@ -967,1462 +287,393 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
   const [history, setHistory] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
-  const [toasts, setToasts] = useState([]);
   const [activityFeed, setActivityFeed] = useState([]);
-  const [desktopNotificationPermission, setDesktopNotificationPermission] = useState(() => {
-    if (typeof window === "undefined" || typeof window.Notification === "undefined") {
-      return "unsupported";
-    }
-
-    return window.Notification.permission;
-  });
+  const [inputMode, setInputMode] = useState("upload");
   const [instagramDetails, setInstagramDetails] = useState(null);
-  const [instagramDetailsLoading, setInstagramDetailsLoading] = useState(false);
-  const [instagramDetailsError, setInstagramDetailsError] = useState("");
-  const [mediaDeleteInProgress, setMediaDeleteInProgress] = useState({});
-  const [postCancelInProgress, setPostCancelInProgress] = useState({});
-  const previousStatusByIdRef = useRef(new Map());
-  const hasHydratedStatusesRef = useRef(false);
-  const postsLoadInFlightRef = useRef(false);
-  const autoAnimeLoadInFlightRef = useRef(false);
-  const instagramDetailsLoadInFlightRef = useRef(false);
-  const runtimeTickInFlightRef = useRef(false);
+  const [insightsError, setInsightsError] = useState("");
+  const [autoAnimeConfig, setAutoAnimeConfig] = useState(null);
+  const [autoAnimeMessage, setAutoAnimeMessage] = useState("");
+  const [newTimeSlot, setNewTimeSlot] = useState("");
 
-  // Instagram URL extraction
-  const [inputMode, setInputMode] = useState("upload"); // "upload" | "direct" | "instagram"
-  const [instagramUrl, setInstagramUrl] = useState("");
-  const [extracting, setExtracting] = useState(false);
-  const [autoPostingFromLink, setAutoPostingFromLink] = useState(false);
-  const [extractError, setExtractError] = useState("");
-
-  const queueSnapshot = useMemo(() => {
-    let pendingCount = 0;
-    let processingCount = 0;
-
-    for (const post of pendingPosts) {
-      if (post.status === "pending") {
-        pendingCount += 1;
-      }
-
-      if (post.status === "processing") {
-        processingCount += 1;
-      }
-    }
-
-    let failedCount = 0;
-    for (const post of history) {
-      if (post.status === "failed") {
-        failedCount += 1;
-      }
-    }
-
-    return { pendingCount, processingCount, failedCount };
-  }, [pendingPosts, history]);
-
-  const activityFeedPreview = useMemo(() => activityFeed.slice(0, 8), [activityFeed]);
-
-  // Status Polling for Background Tasks (Run Now)
-  useEffect(() => {
-    let timer;
-    if (autoAnimeRunning) {
-      timer = setInterval(async () => {
-        try {
-          const { data } = await api.get("/auto-anime/config");
-          const config = data.config;
-          if (config) {
-            setAutoAnimeConfig(config);
-            if (config.lastRunStatus === "success" || config.lastRunStatus === "failed") {
-              setAutoAnimeRunning(false);
-              if (config.lastRunStatus === "success") {
-                loadPosts({ silent: true });
-              }
-            }
-          }
-        } catch (err) {
-          console.error("Polling error:", err);
-        }
-      }, 5000);
-    }
-    return () => clearInterval(timer);
-  }, [autoAnimeRunning]);
+  const loadPosts = async () => { try { const [{ data: pending }, { data: hist }] = await Promise.all([api.get("/posts?status=pending,processing"), api.get("/posts/history")]); setPendingPosts(pending); setHistory(hist); } catch {} };
+  const loadDetails = async () => { 
+    setInsightsError("");
+    try { 
+      const { data } = await api.get("/auth/instagram-account-details"); 
+      setInstagramDetails(data); 
+    } catch (e) { 
+      setInsightsError(e?.response?.data?.message || "Could not load Instagram profile. Your token may be expired."); 
+    } 
+  };
+  const loadAnime = async () => { try { const { data } = await api.get("/auto-anime"); setAutoAnimeConfig(data); } catch {} };
 
 
-  const liveProgressPosts = useMemo(() => {
-    const working = pendingPosts
-      .filter((post) => ["pending", "processing"].includes(String(post.status || "").toLowerCase()))
-      .slice(0, 6);
+  useEffect(() => { loadPosts(); loadAnime(); loadDetails(); const inv = setInterval(loadPosts, POLL_INTERVAL_MS); return () => clearInterval(inv); }, [instagramStatus]);
 
-    if (working.length) {
-      return working;
-    }
 
-    return history.slice(0, 4);
-  }, [history, pendingPosts]);
+  const queueSnapshot = useMemo(() => ({
+    pendingCount: pendingPosts.filter(p => p.status === "pending").length,
+    processingCount: pendingPosts.filter(p => p.status === "processing").length,
+    failedCount: history.filter(p => p.status === "failed").length
+  }), [pendingPosts, history]);
 
   const monitorPipeline = useMemo(() => {
-    const recentHistory = history.slice(0, 20);
-    const postedCount = recentHistory.filter((post) => post.status === "posted").length;
-    const failedCount = recentHistory.filter((post) => post.status === "failed").length;
-    const inFlightCount = queueSnapshot.pendingCount + queueSnapshot.processingCount;
-    const completedCount = postedCount + failedCount;
-    const totalObserved = Math.max(1, inFlightCount + completedCount);
-    const overallProgress = Math.round((completedCount / totalObserved) * 100);
-
+    const isIdle = queueSnapshot.pendingCount === 0 && queueSnapshot.processingCount === 0;
     return [
-      {
-        key: "collect",
-        label: "Collect Media",
-        percent: inFlightCount > 0 || completedCount > 0 ? 100 : 0,
-        detail: "Candidate fetch + filter"
-      },
-      {
-        key: "prepare",
-        label: "Prepare Content",
-        percent: queueSnapshot.processingCount > 0 ? 72 : inFlightCount > 0 ? 45 : completedCount > 0 ? 100 : 0,
-        detail: "Transcode / metadata / queue"
-      },
-      {
-        key: "upload",
-        label: "Upload To Instagram",
-        percent: queueSnapshot.processingCount > 0 ? 82 : queueSnapshot.pendingCount > 0 ? 35 : completedCount > 0 ? 100 : 0,
-        detail: "Container + publish attempts"
-      },
-      {
-        key: "complete",
-        label: "Complete",
-        percent: overallProgress,
-        detail: `${postedCount} posted • ${failedCount} failed`
-      }
+      { key: "collect", label: "Finding Content", percent: isIdle ? 0 : 100 },
+      { key: "prepare", label: "Preparing Post", percent: isIdle ? 0 : (queueSnapshot.processingCount > 0 ? 100 : 45) },
+      { key: "upload", label: "Uploading", percent: isIdle ? 0 : (queueSnapshot.processingCount > 0 ? 80 : 0) },
+      { key: "complete", label: "Done", percent: isIdle ? 0 : 0 }
     ];
-  }, [history, queueSnapshot.failedCount, queueSnapshot.pendingCount, queueSnapshot.processingCount]);
+  }, [queueSnapshot]);
 
-  const historyView = useMemo(
-    () => history.map((post) => ({ ...post, summarizedError: summarizeErrorLog(post.errorLog) })),
-    [history]
-  );
-
-  function getPostLabel(post = {}) {
-    if (post.postType === "reel") {
-      return "Reel";
-    }
-
-    if (post.postType === "post") {
-      return "Post";
-    }
-
-    return "Post";
-  }
-
-  function addActivityEvent({ tone = "info", title, description = "", postId = "" }) {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const event = {
-      id,
-      tone,
-      title,
-      description,
-      postId,
-      createdAt: new Date().toISOString()
-    };
-
-    setActivityFeed((prev) => [event, ...prev].slice(0, MAX_ACTIVITY_ITEMS));
-    setToasts((prev) => [event, ...prev].slice(0, 4));
-
-    window.setTimeout(() => {
-      setToasts((prev) => prev.filter((item) => item.id !== id));
-    }, TOAST_TTL_MS);
-
-    if (
-      desktopNotificationPermission === "granted" &&
-      typeof window !== "undefined" &&
-      typeof window.Notification !== "undefined" &&
-      typeof document !== "undefined" &&
-      document.visibilityState !== "visible"
-    ) {
-      new window.Notification(title, {
-        body: description || title
-      });
-    }
-  }
-
-  async function runRuntimeTick() {
-    if (runtimeTickInFlightRef.current) {
-      return;
-    }
-
-    runtimeTickInFlightRef.current = true;
+  const handleUpdateAutoAnime = async (updates) => {
     try {
-      await api.post("/auto-anime/tick");
-    } catch {
-      // Non-blocking: scheduler cron can still process posts in background.
-    } finally {
-      runtimeTickInFlightRef.current = false;
-    }
-  }
-
-  async function requestDesktopNotifications() {
-    if (typeof window === "undefined" || typeof window.Notification === "undefined") {
-      return;
-    }
-
-    const permission = await window.Notification.requestPermission();
-    setDesktopNotificationPermission(permission);
-
-    if (permission === "granted") {
-      addActivityEvent({
-        tone: "success",
-        title: "Desktop alerts enabled",
-        description: "You will get alerts when queued posts change status."
-      });
-    }
-  }
-
-  async function loadPosts({ silent = false } = {}) {
-    if (postsLoadInFlightRef.current) {
-      return;
-    }
-
-    postsLoadInFlightRef.current = true;
-
-    try {
-      const [{ data: pending }, { data: allHistory }] = await Promise.all([
-        api.get("/posts?status=pending,processing&limit=200"),
-        api.get("/posts/history")
-      ]);
-      setPendingPosts((previous) => (arePostListsEqual(previous, pending) ? previous : pending));
-      setHistory((previous) => (arePostListsEqual(previous, allHistory) ? previous : allHistory));
-    } catch (error) {
-      if (!silent) {
-        setMessage(error?.response?.data?.message || "Failed to load posts.");
-      }
-    } finally {
-      postsLoadInFlightRef.current = false;
-    }
-  }
-
-  async function loadAutoAnimeConfig({ silent = false } = {}) {
-    if (autoAnimeLoadInFlightRef.current) {
-      return;
-    }
-
-    autoAnimeLoadInFlightRef.current = true;
-
-    if (!silent) {
-      setAutoAnimeLoading(true);
-    }
-
-    try {
-      const { data } = await api.get("/auto-anime");
+      const { data } = await api.patch("/auto-anime", updates);
       setAutoAnimeConfig(data);
-    } catch (error) {
-      if (!silent) {
-        setAutoAnimeMessage(error?.response?.data?.message || "Failed to load anime automation settings.");
-      }
-    } finally {
-      autoAnimeLoadInFlightRef.current = false;
+      setAutoAnimeMessage("Settings saved successfully.");
+      setTimeout(() => setAutoAnimeMessage(""), 4000);
+    } catch { setAutoAnimeMessage("Failed to save settings."); }
+  };
 
-      if (!silent) {
-        setAutoAnimeLoading(false);
-      }
-    }
-  }
+  const handleRunAnime = async () => {
+    try {
+      const res = await api.post("/auto-anime/run-now");
+      setAutoAnimeMessage(res?.data?.message || "Running automation now — check Queue in 60 seconds.");
+      setTimeout(() => setAutoAnimeMessage(""), 8000);
+      loadPosts();
+    } catch { setAutoAnimeMessage("Failed to trigger run. Is the backend online?"); }
+  };
 
-  function updateAutoAnimeField(field, value) {
-    setAutoAnimeConfig((prev) => ({ ...(prev || {}), [field]: value }));
-  }
-
-  function addTimeSlot() {
-    if (!newTimeSlot || !autoAnimeConfig) {
-      return;
-    }
-
-    if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(newTimeSlot)) {
-      setAutoAnimeMessage("Use HH:mm format for time slots (example: 09:00).");
-      return;
-    }
-
-    const nextSlots = [...new Set([...(autoAnimeConfig.timeSlots || []), newTimeSlot])].sort();
-    updateAutoAnimeField("timeSlots", nextSlots);
+  const handleActivateDaily = async () => {
+    try {
+      const payload = { enabled: !autoAnimeConfig?.enabled };
+      const res = await api.post("/auto-anime/activate-daily", payload);
+      setAutoAnimeConfig(res?.data?.config || { ...autoAnimeConfig, ...payload });
+      setAutoAnimeMessage(res?.data?.message || (payload.enabled ? "Daily automation activated." : "Daily automation deactivated."));
+      setTimeout(() => setAutoAnimeMessage(""), 6000);
+    } catch { setAutoAnimeMessage("Failed to toggle daily automation."); }
+  };
+  const handleAddTimeSlot = async () => {
+    const timePattern = /^([01]\d|2[0-3]):([0-5]\d)$/;
+    if (!timePattern.test(newTimeSlot)) { setAutoAnimeMessage("Please enter a valid time in HH:MM format (e.g. 09:00)"); return; }
+    const current = autoAnimeConfig?.timeSlots || [];
+    if (current.includes(newTimeSlot)) { setAutoAnimeMessage("This time is already in your schedule."); return; }
+    const updated = [...current, newTimeSlot].sort();
+    await handleUpdateAutoAnime({ timeSlots: updated });
     setNewTimeSlot("");
-    setAutoAnimeMessage("");
-  }
+  };
 
-  function removeTimeSlot(slot) {
-    if (!autoAnimeConfig) {
-      return;
-    }
+  const handleRemoveTimeSlot = async (slotToRemove) => {
+    const current = autoAnimeConfig?.timeSlots || [];
+    if (current.length <= 1) { setAutoAnimeMessage("You need at least one posting time."); return; }
+    const updated = current.filter(s => s !== slotToRemove);
+    await handleUpdateAutoAnime({ timeSlots: updated });
+  };
 
-    const nextSlots = (autoAnimeConfig.timeSlots || []).filter((item) => item !== slot);
-    updateAutoAnimeField("timeSlots", nextSlots);
-  }
+  const handleFileChange = (e) => { const f = e.target.files?.[0]; if (f) { setMediaFile(f); setMediaPreview(URL.createObjectURL(f)); setPostType(f.type.startsWith("video") ? "reel" : "post"); } };
 
-  async function saveAutoAnimeConfig() {
-    if (!autoAnimeConfig) {
-      return;
-    }
-
-    setAutoAnimeSaving(true);
-    setAutoAnimeMessage("");
-
+  const handleSubmit = async (e) => {
+    e.preventDefault(); setSubmitting(true); setMessage("");
     try {
-      const hashtagSetsText = Array.isArray(autoAnimeConfig.hashtagSets)
-        ? autoAnimeConfig.hashtagSets.join("\n")
-        : String(autoAnimeConfig.hashtagSets || "");
-      const keywordSetsText = Array.isArray(autoAnimeConfig.keywordSets)
-        ? autoAnimeConfig.keywordSets.join("\n")
-        : String(autoAnimeConfig.keywordSets || "");
-
-      const payload = {
-        ...autoAnimeConfig,
-        subreddits: String(autoAnimeConfig.subreddits || "")
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean),
-        keywords: String(autoAnimeConfig.keywords || "")
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean),
-        hashtagSets: hashtagSetsText
-          .split("\n")
-          .map((item) => item.trim())
-          .filter(Boolean),
-        keywordSets: keywordSetsText
-          .split("\n")
-          .map((item) => item.trim())
-          .filter(Boolean),
-        timeSlots: (autoAnimeConfig.timeSlots || []).filter(Boolean)
-      };
-
-      const { data } = await api.patch("/auto-anime", payload);
-      setAutoAnimeConfig(data);
-      setAutoAnimeMessage("Anime automation settings saved.");
-    } catch (error) {
-      setAutoAnimeMessage(error?.response?.data?.message || "Could not save anime automation settings.");
-    } finally {
-      setAutoAnimeSaving(false);
-    }
-  }
-  async function runAutoAnimeNow() {
-    setAutoAnimeRunning(true);
-    setAutoAnimeMessage("");
-    try {
-      const { data } = await api.post("/auto-anime/run-now", {
-        contentType: autoAnimeConfig?.contentType || "both"
-      });
-      if (data.queued) {
-        setAutoAnimeMessage(data.message || "Search & Generation started in background...");
-        
-        addActivityEvent({
-          tone: "info",
-          title: "Background Search Started",
-          description: "System is searching Reddit and generating media. Tracking progress..."
-        });
-      } else {
-        setAutoAnimeMessage(data.message || "No content found.");
-        setAutoAnimeRunning(false);
-      }
-    } catch (error) {
-      setAutoAnimeMessage(error?.response?.data?.message || "Failed to start.");
-      setAutoAnimeRunning(false);
-    }
-  }
-
-  async function toggleDailyAutoSchedule() {
-    if (!autoAnimeConfig) {
-      return;
-    }
-
-    const newEnabledState = !autoAnimeConfig.enabled;
-    setAutoAnimeActivating(true);
-    setAutoAnimeMessage("");
-
-    try {
-      const hashtagSetsText = Array.isArray(autoAnimeConfig.hashtagSets)
-        ? autoAnimeConfig.hashtagSets.join("\n")
-        : String(autoAnimeConfig.hashtagSets || "");
-      const keywordSetsText = Array.isArray(autoAnimeConfig.keywordSets)
-        ? autoAnimeConfig.keywordSets.join("\n")
-        : String(autoAnimeConfig.keywordSets || "");
-
-      const payload = {
-        ...autoAnimeConfig,
-        enabled: newEnabledState,
-        subreddits: String(autoAnimeConfig.subreddits || "")
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean),
-        keywords: String(autoAnimeConfig.keywords || "")
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean),
-        hashtagSets: hashtagSetsText
-          .split("\n")
-          .map((item) => item.trim())
-          .filter(Boolean),
-        keywordSets: keywordSetsText
-          .split("\n")
-          .map((item) => item.trim())
-          .filter(Boolean),
-        timeSlots: (autoAnimeConfig.timeSlots || []).filter(Boolean)
-      };
-
-      if (newEnabledState) {
-        // Turning ON
-        const { data } = await api.post("/auto-anime/activate-daily", payload);
-        if (data?.config) setAutoAnimeConfig(data.config);
-        setAutoAnimeMessage(data?.message || "Daily auto scheduler activated.");
-        addActivityEvent({
-          tone: "success",
-          title: "Daily auto schedule activated",
-          description: "Saved time slots par daily auto post run hoga."
-        });
-      } else {
-        // Turning OFF
-        const { data } = await api.patch("/auto-anime", payload);
-        if (data) setAutoAnimeConfig(data);
-        setAutoAnimeMessage("Daily auto scheduler stopped successfully.");
-        addActivityEvent({
-          tone: "neutral",
-          title: "Daily auto schedule stopped",
-          description: "Auto posts will no longer run automatically."
-        });
-      }
-
-      await loadPosts();
-    } catch (error) {
-      setAutoAnimeMessage(error?.response?.data?.message || "Could not toggle daily auto scheduler.");
-    } finally {
-      setAutoAnimeActivating(false);
-    }
-  }
-
-  useEffect(() => {
-    loadPosts();
-    loadAutoAnimeConfig();
-    runRuntimeTick();
-  }, []);
-
-  async function loadInstagramDetails({ silent = false } = {}) {
-    if (instagramDetailsLoadInFlightRef.current) {
-      return;
-    }
-
-    instagramDetailsLoadInFlightRef.current = true;
-
-    if (!silent) {
-      setInstagramDetailsLoading(true);
-      setInstagramDetailsError("");
-    }
-
-    try {
-      const { data } = await api.get("/auth/instagram-account-details");
-      setInstagramDetails(data);
-    } catch (error) {
-      setInstagramDetails(null);
-      if (!silent) {
-        setInstagramDetailsError(
-          error?.response?.data?.message ||
-            "Could not fetch Instagram account details. Check token permissions."
-        );
-      }
-    } finally {
-      instagramDetailsLoadInFlightRef.current = false;
-
-      if (!silent) {
-        setInstagramDetailsLoading(false);
-      }
-    }
-  }
-
-  useEffect(() => {
-    if (instagramStatus?.valid) {
-      loadInstagramDetails();
-    }
-  }, [instagramStatus?.valid]);
-
-  useEffect(() => {
-    const combinedPosts = [...pendingPosts, ...history];
-    const currentStatusById = new Map(combinedPosts.map((post) => [post._id, post.status]));
-
-    if (!hasHydratedStatusesRef.current) {
-      previousStatusByIdRef.current = currentStatusById;
-      hasHydratedStatusesRef.current = true;
-      return;
-    }
-
-    for (const post of combinedPosts) {
-      const previousStatus = previousStatusByIdRef.current.get(post._id);
-
-      if (!previousStatus) {
-        if (["pending", "processing"].includes(post.status)) {
-          addActivityEvent({
-            tone: "info",
-            title: `${getPostLabel(post)} queued`,
-            description: `Scheduled for ${formatDate(post.scheduledTime)}`,
-            postId: post._id
-          });
-        }
-        continue;
-      }
-
-      if (previousStatus === post.status) {
-        continue;
-      }
-
-      if (post.status === "processing") {
-        addActivityEvent({
-          tone: "info",
-          title: `${getPostLabel(post)} uploading`,
-          description: "Instagram upload process started.",
-          postId: post._id
-        });
-      }
-
-      if (post.status === "posted") {
-        addActivityEvent({
-          tone: "success",
-          title: `${getPostLabel(post)} posted`,
-          description: "Your content was published successfully.",
-          postId: post._id
-        });
-      }
-
-      if (post.status === "failed") {
-        addActivityEvent({
-          tone: "danger",
-          title: `${getPostLabel(post)} failed`,
-          description: post.errorLog || "Instagram rejected this upload.",
-          postId: post._id
-        });
-      }
-
-      if (post.status === "pending" && previousStatus === "processing") {
-        addActivityEvent({
-          tone: "warn",
-          title: `${getPostLabel(post)} re-queued`,
-          description: "Still processing on Instagram. Auto-retrying shortly.",
-          postId: post._id
-        });
-      }
-    }
-
-    previousStatusByIdRef.current = currentStatusById;
-  }, [history, pendingPosts]);
-
-  useEffect(() => {
-    // Unified Smart Heartbeat (8s)
-    // Faster heartbeat (8s) for better responsiveness while maintaining efficiency.
-    const HEARTBEAT_INTERVAL_MS = 8000;
-    
-    const interval = setInterval(() => {
-      const isVisible = typeof document === "undefined" || document.visibilityState === "visible";
-      if (!isVisible) return;
-
-      // 1. Always poll posts (Queue/History)
-      loadPosts({ silent: true });
-      
-      // 2. Always run tick for background processing status
-      runRuntimeTick();
-
-      // 3. Conditional: load auto-config if tab is active OR if automation is currently running
-      const isAutomationActive = activeTab === "animeAutomation" || activeTab === "live";
-      const isAutomationInProcess = autoAnimeRunning || autoAnimeActivating;
-      
-      if (isAutomationActive || isAutomationInProcess) {
-        loadAutoAnimeConfig({ silent: true });
-      }
-
-      // 4. Conditional: load Instagram analytics only when on Insights tab
-      if (activeTab === "insights" && instagramStatus?.valid) {
-        loadInstagramDetails({ silent: true });
-      }
-    }, HEARTBEAT_INTERVAL_MS);
-
-    return () => clearInterval(interval);
-  }, [activeTab, instagramStatus?.valid, autoAnimeRunning, autoAnimeActivating]);
-
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(ACTIVE_THEME_STORAGE_KEY, theme);
-    }
-  }, [theme]);
-
-  async function submitSchedule(event) {
-    event.preventDefault();
-    if (!mediaUrl && !mediaFile) {
-      setMessage("Upload a file or enter media URL before submitting.");
-      return;
-    }
-
-    if (!scheduledTime) {
-      setMessage("Select schedule time before submitting.");
-      return;
-    }
-
-    setSubmitting(true);
-    setMessage("");
-
-    try {
-      let finalMediaUrl = mediaUrl;
-      let finalCaption = caption;
-      let finalKeywords = generatedKeywords;
-      let finalHashtags = generatedHashtags;
-
-      if (mediaFile) {
-        const formData = new FormData();
-        formData.append("media", mediaFile);
-        let uploadResponse;
-        try {
-          uploadResponse = await api.post("/uploads/media", formData, {
-            headers: { "Content-Type": "multipart/form-data" }
-          });
-        } catch (uploadError) {
-          const uploadMessage =
-            uploadError?.response?.data?.message ||
-            "Upload failed. Use MP4, MOV, JPG, PNG, or WEBP and try again.";
-          setMessage(`Upload failed: ${uploadMessage}`);
-          return;
-        }
-        finalMediaUrl = uploadResponse.data.mediaUrl;
-      }
-
-      if (autoGenerateText) {
-        const seedText = mediaFile?.name || instagramUrl || finalMediaUrl;
-        const { data: generated } = await api.post("/posts/generate-upload-text", {
-          postType,
-          seedText,
-          existingCaption: finalCaption
-        });
-
-        finalCaption = generated.caption;
-        finalKeywords = generated.keywords || [];
-        finalHashtags = generated.hashtags || [];
-        setCaption(generated.caption || "");
-        setGeneratedKeywords(generated.keywords || []);
-        setGeneratedHashtags(generated.hashtags || []);
-      }
-
-      if (inputMode === "instagram" && !mediaFile) {
-        if (!instagramUrl.trim()) {
-          setMessage("Enter Instagram URL before submitting.");
-          return;
-        }
-
-        const { data } = await api.post("/posts/from-link/schedule", {
-          sourceUrl: instagramUrl.trim(),
-          caption: finalCaption,
-          keywords: finalKeywords,
-          hashtags: finalHashtags,
-          scheduledTime,
-          postType
-        });
-
-        finalMediaUrl = data?.post?.mediaUrl || "";
-      } else {
-        await api.post(
-          "/posts",
-          {
-            mediaUrl: finalMediaUrl,
-            caption: finalCaption,
-            keywords: finalKeywords,
-            hashtags: finalHashtags,
-            postType,
-            scheduledTime
-          },
-          {
-            timeout: INSTANT_POST_REQUEST_TIMEOUT_MS
-          }
-        );
-      }
-
-      setMediaFile(null);
-      setMediaPreview("");
-      setMediaUrl("");
-      setCaption("");
-      setScheduledTime("");
-      setGeneratedKeywords([]);
-      setGeneratedHashtags([]);
-      setInstagramUrl("");
-      setExtractError("");
-      if (String(finalMediaUrl).includes("localhost") || String(finalMediaUrl).includes("127.0.0.1")) {
-        setMessage("Post scheduled. Note: localhost media URLs are not reachable by Instagram. Use a public URL/tunnel for successful posting.");
-      } else {
-        setMessage("Post scheduled successfully.");
-      }
-      addActivityEvent({
-        tone: "info",
-        title: `${postType === "reel" ? "Reel" : "Post"} queued`,
-        description: `Scheduled for ${formatDate(scheduledTime)}`
-      });
-      await loadPosts();
-      setActiveTab("pending");
-    } catch (error) {
-      if (error?.code === "ECONNABORTED") {
-        setMessage(
-          "Request timed out while Instagram was processing this reel. Post may still be queued; refresh queue in a few seconds."
-        );
-      } else {
-        setMessage(error?.response?.data?.message || "Failed to schedule post.");
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleExtract() {
-    if (!instagramUrl.trim()) return;
-    setExtracting(true);
-    setExtractError("");
-    setMediaUrl("");
-    try {
-      const { data } = await api.post("/posts/extract-url", {
-        sourceUrl: instagramUrl.trim(),
-        postType
-      });
-      setMediaUrl(data.mediaUrl);
-      if (data?.postType === "reel" || data?.postType === "post") {
-        setPostType(data.postType);
-      }
-      if (data.caption) setCaption(data.caption);
-    } catch (err) {
-      const rawMessage =
-        err?.response?.data?.message ||
-        (typeof err?.response?.data === "string" ? err.response.data : "") ||
-        err?.message ||
-        "";
-      const fallback =
-        "Instagram blocked extraction for this URL. Use Upload File (best) or Direct URL for reliable scheduling.";
-      const friendlyMessage =
-        rawMessage && !/unexpected server error/i.test(rawMessage) ? rawMessage : fallback;
-      setExtractError(friendlyMessage);
-    } finally {
-      setExtracting(false);
-    }
-  }
-
-  async function handleExtractAndAutoPost() {
-    if (!instagramUrl.trim()) {
-      return;
-    }
-
-    setAutoPostingFromLink(true);
-    setExtractError("");
-    setMessage("");
-
-    try {
-      const { data } = await api.post(
-        "/posts/from-link/auto",
-        {
-          sourceUrl: instagramUrl.trim(),
-          caption: caption || undefined,
-          postType
-        },
-        {
-          timeout: INSTANT_POST_REQUEST_TIMEOUT_MS
-        }
-      );
-
-      const posted = data?.post?.status === "posted";
-      const typeLabel = data?.post?.postType === "reel" ? "Reel" : "Post";
-      setMessage(
-        posted
-          ? `${typeLabel} auto-posted successfully.`
-          : `${typeLabel} downloaded and queued for auto posting.`
-      );
-
-      addActivityEvent({
-        tone: posted ? "success" : "info",
-        title: posted ? `${typeLabel} posted` : `${typeLabel} queued`,
-        description:
-          data?.post?.status === "failed"
-            ? data?.post?.errorLog || "Auto post failed."
-            : "Link media downloaded and processing started."
-      });
-
-      if (data?.post?.mediaUrl) {
-        setMediaUrl(data.post.mediaUrl);
-      }
-
-      if (data?.post?.postType === "reel" || data?.post?.postType === "post") {
-        setPostType(data.post.postType);
-      }
-
-      await loadPosts();
-      setActiveTab("pending");
-    } catch (err) {
-      const extractedMessage =
-        err?.response?.data?.message ||
-        (typeof err?.response?.data === "string" ? err.response.data : "") ||
-        err?.message ||
-        "Could not auto-post from this link.";
-      setExtractError(extractedMessage);
-    } finally {
-      setAutoPostingFromLink(false);
-    }
-  }
-
-  function handleFileChange(event) {
-    const file = event.target.files?.[0] || null;
-    setMediaFile(file);
-
-    if (file) {
-      if (mediaPreview && mediaPreview.startsWith("blob:")) {
-        URL.revokeObjectURL(mediaPreview);
-      }
-      const preview = URL.createObjectURL(file);
-      setMediaPreview(preview);
-      setMediaUrl("");
-      setExtractError("");
-      setInstagramUrl("");
-      if (file.type.startsWith("video/")) {
-        setPostType("reel");
-      } else if (file.type.startsWith("image/")) {
-        setPostType("post");
-      }
-    } else {
-      if (mediaPreview && mediaPreview.startsWith("blob:")) {
-        URL.revokeObjectURL(mediaPreview);
-      }
-      setMediaPreview("");
-    }
-  }
-
-  function hasDeletableLocalMedia(post) {
-    if (!post || post.localMediaDeletedAt) {
-      return false;
-    }
-
-    if (post.localMediaPath) {
-      return true;
-    }
-
-    return /\/media\//i.test(String(post.mediaUrl || ""));
-  }
-
-  async function handleDeleteLocalMedia(post) {
-    if (!post?._id || !hasDeletableLocalMedia(post)) {
-      return;
-    }
-
-    const warnPending = post.status === "pending" || post.status === "processing";
-    const confirmed = window.confirm(
-      warnPending
-        ? "This post is not published yet. Deleting local media now can make posting fail. Continue?"
-        : "Delete local media file for this post?"
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setMediaDeleteInProgress((prev) => ({ ...prev, [post._id]: true }));
-    setMessage("");
-
-    try {
-      const { data } = await api.delete(`/posts/${post._id}/local-media`);
-      const freedText = data?.bytesFreed ? ` (${formatBytes(data.bytesFreed)} freed)` : "";
-      setMessage(`${data?.message || "Local media cleanup completed"}${freedText}`);
-      await loadPosts();
-    } catch (error) {
-      setMessage(error?.response?.data?.message || "Failed to delete local media.");
-    } finally {
-      setMediaDeleteInProgress((prev) => {
-        const next = { ...prev };
-        delete next[post._id];
-        return next;
-      });
-    }
-  }
-
-  async function handleCancelPost(post) {
-    if (!post?._id) {
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `Cancel this ${post.postType}? This will permanently remove it from the queue.`
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setPostCancelInProgress((prev) => ({ ...prev, [post._id]: true }));
-    setMessage("");
-
-    try {
-      await api.delete(`/posts/${post._id}`);
-      setMessage(`${post.postType} cancelled and removed from queue.`);
-      await loadPosts();
-    } catch (error) {
-      setMessage(error?.response?.data?.message || `Failed to cancel ${post.postType}.`);
-    } finally {
-      setPostCancelInProgress((prev) => {
-        const next = { ...prev };
-        delete next[post._id];
-        return next;
-      });
-    }
-  }
-
-  useEffect(() => {
-    return () => {
-      if (mediaPreview && mediaPreview.startsWith("blob:")) {
-        URL.revokeObjectURL(mediaPreview);
-      }
-    };
-  }, [mediaPreview]);
-
-  const activeToast = toasts[0] || null;
+      let finalMedia = mediaUrl; if (mediaFile) { const fd = new FormData(); fd.append("media", mediaFile); const { data: up } = await api.post("/uploads/media", fd); finalMedia = up.mediaUrl; }
+      await api.post("/posts", { mediaUrl: finalMedia, caption, postType, scheduledTime });
+      setMessage("Post added to queue successfully!"); loadPosts(); setActiveTab("pending");
+      setCaption(""); setMediaPreview(""); setMediaFile(null);
+    } catch { setMessage("Failed to schedule post. Please try again."); } finally { setSubmitting(false); }
+  };
 
   return (
-    <div className="min-h-screen bg-grid px-4 pb-28 pt-2 text-current md:px-6 md:pb-8 md:pt-3 lg:pb-8">
-      <div className="mx-auto flex max-w-7xl flex-col gap-5">
-        <Sidebar
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          onLogout={onLogout}
-          user={user}
-        />
+    <div className="flex min-h-screen bg-white text-slate-900" style={{ fontFamily: 'Inter, sans-serif' }}>
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} user={user} onLogout={onLogout} />
+      
+      <div className="flex-1 lg:ml-[320px] p-8 lg:p-14 overflow-x-hidden">
+        <main className="max-w-7xl mx-auto pl-12 lg:pl-0">
+          
+          <AnimatePresence mode="wait">
+            {activeTab === "controlCenter" && (
+              <motion.div key="control" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-12">
+                <ProCard>
+                   <ProHeader icon={Gamepad2} title="CONTROL" highlight="CENTER" subtitle="Check your system status and refresh the dashboard" />
+                   <div className="grid gap-12 lg:grid-cols-2">
+                      <div className="p-12 bg-slate-50 rounded-[40px] border border-slate-100 shadow-sm">
+                         <p className="text-[12px] font-black uppercase tracking-[0.4em] text-slate-500 mb-10">System Info</p>
+                         <div className="space-y-8">
+                            <div className="flex items-center justify-between"><span className="text-[15px] font-black uppercase text-slate-950">Instagram Hub Status</span><span className={`status-pro ${instagramStatus?.valid ? "bg-emerald-50 text-emerald-900 border-emerald-100" : "bg-rose-50 text-rose-900 border-rose-100"}`}>{instagramStatus?.valid ? "SECURE" : "DISCONNECTED"}</span></div>
+                            <div className="flex items-center justify-between"><span className="text-[15px] font-black uppercase text-slate-950">Interface Suite</span><span className="status-pro bg-cyan-50 text-cyan-900 border-cyan-100 font-extrabold">INSTAFLOW PRO V10.1</span></div>
+                         </div>
+                      </div>
+                      <div className="p-12 bg-slate-50 rounded-[40px] border border-slate-100 shadow-sm flex flex-col justify-center gap-6">
+                         <p className="text-[12px] font-black uppercase tracking-[0.4em] text-slate-500">Actions</p>
+                         <button onClick={() => window.location.reload()} className="pro-btn-elite w-full text-[13px]"><RefreshCcw size={18} /> REFRESH DASHBOARD</button>
+                         <p className="text-[11px] font-black text-slate-400 uppercase italic text-center">Forces the page to reload and refresh all data</p>
+                      </div>
+                   </div>
+                </ProCard>
+              </motion.div>
+            )}
 
-        <main className="screen-stack space-y-5">
-          {activeTab === "liveMonitor" && (
-            <LiveMonitorSection 
-              requestDesktopNotifications={requestDesktopNotifications}
-              desktopNotificationPermission={desktopNotificationPermission}
-              activityFeedPreview={activityFeedPreview}
-              activityFeed={activityFeed}
-              queueSnapshot={queueSnapshot}
-              history={history}
-              monitorPipeline={monitorPipeline}
-              autoAnimeActivating={autoAnimeActivating}
-              autoAnimeRunning={autoAnimeRunning}
-              autoAnimeConfig={autoAnimeConfig}
-              liveProgressPosts={liveProgressPosts}
-              getProgressForPost={getProgressForPost}
-              getPostLabel={getPostLabel}
-              getProcessLabel={getProcessLabel}
-              formatDate={formatDate}
-            />
-          )}
+            {activeTab === "liveMonitor" && (
+              <LiveMonitorSection
+                activityFeedPreview={activityFeed.slice(0, 15)}
+                queueSnapshot={queueSnapshot}
+                monitorPipeline={monitorPipeline}
+                liveProgressPosts={pendingPosts.slice(0, 12)}
+              />
+            )}
 
-          {activeTab === "controlCenter" && (
-            <section className="glass-panel screen-frame fade-rise rounded-2xl px-4 py-4 md:px-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="muted-text text-xs uppercase tracking-[0.2em]">Control Center</p>
-                  <h3 className="text-lg font-bold font-display">Theme Mode</h3>
-                  <p className="muted-text mt-1 text-xs">Professional UI with two modes only: Light and Dark.</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {[
-                    { key: "light", label: "Light" },
-                    { key: "dark", label: "Dark" }
-                  ].map((item) => (
-                    <button
-                      key={item.key}
-                      type="button"
-                      onClick={() => setTheme(item.key)}
-                      className={`theme-chip rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                        theme === item.key ? "active" : "text-slate-700"
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </section>
-          )}
+            {activeTab === "schedule" && (
+              <motion.div key="schedule" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-12">
+                 <ProCard>
+                   <ProHeader icon={CalendarClock} title="SCHEDULE" highlight="POST" subtitle="Manually upload media or scrape links to queue" />
+                   <div className="grid gap-20 lg:grid-cols-[1.2fr_1fr]">
+                     <form onSubmit={handleSubmit} className="space-y-12">
+                       <div className="inline-flex bg-slate-100 p-2 rounded-[24px] border border-slate-200">
+                         {[ { id: "upload", label: "UPLOAD FILE", icon: Upload }, { id: "instagram", label: "LINK SCRAPER", icon: Link2 } ].map(m => (
+                           <button type="button" key={m.id} onClick={() => setInputMode(m.id)} className={`flex items-center gap-4 rounded-[18px] px-10 py-5 text-[13px] font-black tracking-tight transition-all ${inputMode === m.id ? "bg-white shadow-lg text-slate-950 scale-105" : "text-slate-500 hover:text-slate-800"}`}>
+                             <m.icon size={16} /> {m.label}
+                           </button>
+                         ))}
+                       </div>
+                       {inputMode === "upload" && (
+                         <div className="relative group p-20 text-center rounded-[48px] border-4 border-dashed border-slate-100 bg-slate-50 hover:bg-white hover:border-cyan-600 transition-all duration-500 cursor-pointer">
+                           <input type="file" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" />
+                           <Upload size={36} className="mx-auto text-slate-300 group-hover:text-cyan-600 mb-6" />
+                           <p className="text-[13px] font-black uppercase text-slate-500 tracking-[0.4em] group-hover:text-slate-950">SELECT MEDIA ASSET</p>
+                         </div>
+                       )}
+                       <div className="grid gap-10">
+                         <div className="relative">
+                            <textarea value={caption} onChange={e => setCaption(e.target.value)} className="w-full h-[280px] p-12 text-[17px] font-semibold border-4 border-slate-50 bg-slate-50 focus:bg-white focus:border-cyan-500 rounded-[32px] transition-all" placeholder="Paste your caption or post details here..." />
+                            <p className="absolute left-10 top-[-10px] text-[10px] font-black uppercase bg-white border-2 border-cyan-100 px-4 py-1 rounded-full text-cyan-800 tracking-widest">CAPTION / DETAILS</p>
+                         </div>
+                         <div className="grid sm:grid-cols-2 gap-10">
+                           <div className="relative"><input type="datetime-local" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)} className="w-full pt-10 pb-6 px-10 font-black text-lg border-4 border-slate-50 rounded-[32px] bg-slate-50" required /><p className="absolute left-10 top-[-10px] text-[10px] font-black uppercase bg-white border-2 border-cyan-100 px-4 py-1 rounded-full text-cyan-800 tracking-widest">SCHEDULE TIME</p></div>
+                           <button type="submit" disabled={submitting} className="pro-btn-elite w-full text-[13px] italic">{submitting ? "PROCESSING..." : "SCHEDULE POST"}</button>
+                         </div>
+                       </div>
+                       {message && <div className="p-8 bg-emerald-50 rounded-3xl border border-emerald-100 text-[13px] font-black text-emerald-900 uppercase italic text-center animate-pulse">{message}</div>}
+                     </form>
+                     <aside className="aspect-[4/5] bg-slate-950 rounded-[64px] border-[16px] border-slate-950 shadow-2xl overflow-hidden relative flex flex-col justify-center items-center">
+                        {mediaPreview || mediaUrl ? (
+                           postType === "reel" ? <video src={mediaPreview || mediaUrl} className="w-full h-full object-cover" controls /> : <img src={mediaPreview || mediaUrl} className="w-full h-full object-cover" alt="Preview" />
+                        ) : <div className="text-center opacity-20"><TrendingUp size={100} className="text-white mb-8 mx-auto" /><p className="text-[14px] font-black text-white uppercase tracking-[1em] italic">NODE STANDBY</p></div>}
+                     </aside>
+                   </div>
+                 </ProCard>
+              </motion.div>
+            )}
 
-          {activeTab === "controlCenter" && instagramStatus?.valid && (
-            <section className="glass-panel screen-frame rounded-2xl border border-emerald-400/40 bg-emerald-100/75 px-4 py-3 text-sm text-emerald-900">
-              Instagram token connected{instagramStatus.username ? ` as @${instagramStatus.username}` : ""}.
-            </section>
-          )}
-
-          {activeTab === "insights" && instagramStatus?.valid && (
-            <section className="glass-panel rounded-2xl p-5 md:p-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="muted-text text-xs uppercase tracking-[0.18em]">Instagram Analytics</p>
-                  <h3 className="text-xl font-bold font-display">Account Insights</h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={loadInstagramDetails}
-                  className="ghost-btn px-3 py-2 text-xs"
-                  disabled={instagramDetailsLoading}
-                >
-                  {instagramDetailsLoading ? "Refreshing..." : "Refresh"}
-                </button>
-              </div>
-
-              {instagramDetailsError && (
-                <p className="mt-3 rounded-lg border border-red-300/60 bg-red-50 px-3 py-2 text-sm text-red-700">
-                  {instagramDetailsError}
-                </p>
-              )}
-
-              {instagramDetails && (
-                <>
-                  <div className="mt-4 grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-                    <div className="rounded-xl border border-slate-200 bg-white/80 p-4 sm:p-5">
-                      <div className="flex items-center gap-3 sm:gap-4">
-                        {instagramDetails.account?.profilePictureUrl ? (
-                          <img
-                            src={instagramDetails.account.profilePictureUrl}
-                            alt="Instagram profile"
-                            className="h-14 w-14 rounded-full border border-slate-200 object-cover sm:h-16 sm:w-16"
-                          />
-                        ) : (
-                          <div className="flex h-14 w-14 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-sm font-bold sm:h-16 sm:w-16">
-                            IG
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold">@{instagramDetails.account?.username || "unknown"}</p>
-                          {instagramDetails.account?.name && (
-                            <p className="truncate text-sm text-slate-600">{instagramDetails.account.name}</p>
-                          )}
+            {activeTab === "insights" && (
+              <motion.div key="insights" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-10">
+                 {insightsError && (
+                   <div className="p-8 bg-rose-50 border border-rose-100 rounded-2xl text-[13px] font-semibold text-rose-700 flex items-center justify-between gap-4">
+                     <span>{insightsError}</span>
+                     <button onClick={loadDetails} className="ghost-elite-btn px-6 py-3 text-[11px]">RETRY</button>
+                   </div>
+                 )}
+                 {instagramDetails?.account ? (
+                   <>
+                     <ProCard className="flex flex-col md:flex-row items-center gap-12 p-12">
+                        <img src={instagramDetails.account.profilePictureUrl || ""} onError={e => { e.target.src = `https://ui-avatars.com/api/?name=${instagramDetails.account.username}&background=0891b2&color=fff&size=160`; }} className="w-32 h-32 rounded-full border-4 border-white shadow-xl object-cover" alt="Profile" />
+                        <div className="flex-1 space-y-4">
+                           <div>
+                             <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Connected Instagram Account</p>
+                             <h4 className="text-2xl font-black text-slate-950 tracking-tight mt-1">@{instagramDetails.account.username}</h4>
+                             {instagramDetails.account.biography && <p className="text-[13px] text-slate-500 mt-2 leading-snug max-w-md">{instagramDetails.account.biography}</p>}
+                           </div>
+                           <div className="flex flex-wrap gap-8">
+                              <div><p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Followers</p><p className="text-2xl font-black text-slate-950">{formatShortNumber(instagramDetails.account.followersCount)}</p></div>
+                              <div><p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Following</p><p className="text-2xl font-black text-slate-950">{formatShortNumber(instagramDetails.account.followsCount)}</p></div>
+                              <div><p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Posts</p><p className="text-2xl font-black text-slate-950">{formatShortNumber(instagramDetails.account.mediaCount)}</p></div>
+                           </div>
                         </div>
-                      </div>
-                      {instagramDetails.account?.biography && (
-                        <p className="mt-3 text-sm leading-relaxed text-slate-600">{instagramDetails.account.biography}</p>
-                      )}
-                    </div>
+                        <button onClick={loadDetails} className="ghost-elite-btn px-6 py-3 text-[11px] self-start"><RefreshCcw size={14} /> REFRESH</button>
+                     </ProCard>
+                     {instagramDetails.totals && (
+                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                         {[
+                           { label: "Total Likes", value: formatShortNumber(instagramDetails.totals.likes) },
+                           { label: "Total Comments", value: formatShortNumber(instagramDetails.totals.comments) },
+                           { label: "Total Views", value: formatShortNumber(instagramDetails.totals.views) },
+                           { label: "Total Saves", value: formatShortNumber(instagramDetails.totals.saves) },
+                         ].map(stat => (
+                           <div key={stat.label} className="pro-card p-8">
+                             <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">{stat.label}</p>
+                             <p className="text-3xl font-black text-slate-950 tracking-tight">{stat.value}</p>
+                           </div>
+                         ))}
+                       </div>
+                     )}
+                     <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                       {(instagramDetails.recentMedia || []).map(item => (
+                         <div key={item.id} className="pro-card group overflow-hidden">
+                            <div className="aspect-square bg-slate-100 overflow-hidden">
+                              {item.mediaType === "VIDEO" ? 
+                                <video src={item.mediaUrl} className="w-full h-full object-cover" /> : 
+                                <img src={item.mediaUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="Post" />
+                              }
+                            </div>
+                            <div className="p-8 space-y-4">
+                               <div className="flex items-center justify-between">
+                                  <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{item.mediaType}</span>
+                                  <div className="flex items-center gap-2 text-[13px] font-black text-slate-700"><Activity size={14} className="text-rose-500" /> {formatShortNumber(item.likeCount)}</div>
+                               </div>
+                               {item.caption && <p className="text-[12px] text-slate-500 leading-snug line-clamp-2">{item.caption}</p>}
+                               <a href={item.permalink} target="_blank" rel="noreferrer" className="block w-full text-center py-3 bg-slate-50 hover:bg-slate-900 hover:text-white text-[11px] font-black text-slate-600 rounded-xl transition-all uppercase tracking-widest">VIEW ON INSTAGRAM</a>
+                            </div>
+                         </div>
+                       ))}
+                     </div>
+                   </>
+                 ) : !insightsError ? (
+                   <ProCard className="p-32 text-center">
+                      <RefreshCcw size={48} className="mx-auto text-slate-200 mb-6 animate-spin-slow" />
+                      <p className="text-[14px] font-semibold text-slate-400">Loading Instagram profile...</p>
+                      <button onClick={loadDetails} className="mt-6 ghost-elite-btn px-8 py-3 text-[11px]">RETRY NOW</button>
+                   </ProCard>
+                 ) : null}
+              </motion.div>
+            )}
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-xl border border-slate-200 bg-white/80 p-3">
-                        <p className="muted-text text-xs">Followers</p>
-                        <p className="mt-1 text-xl font-bold font-display">
-                          {formatNumber(instagramDetails.account?.followersCount)}
-                        </p>
-                      </div>
-                      <div className="rounded-xl border border-slate-200 bg-white/80 p-3">
-                        <p className="muted-text text-xs">Following</p>
-                        <p className="mt-1 text-xl font-bold font-display">
-                          {formatNumber(instagramDetails.account?.followsCount)}
-                        </p>
-                      </div>
-                      <div className="rounded-xl border border-slate-200 bg-white/80 p-3">
-                        <p className="muted-text text-xs">Posts</p>
-                        <p className="mt-1 text-xl font-bold font-display">
-                          {formatNumber(instagramDetails.account?.mediaCount)}
-                        </p>
-                      </div>
-                      <div className="rounded-xl border border-slate-200 bg-white/80 p-3">
-                        <p className="muted-text text-xs">Profile Views</p>
-                        <p className="mt-1 text-xl font-bold font-display">
-                          {formatNumber(instagramDetails.accountInsights?.profile_views || 0)}
-                        </p>
+            {activeTab === "animeAutomation" && (
+              <motion.div key="auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-12">
+                 <ProCard>
+                    <div className="flex flex-col lg:flex-row justify-between items-start gap-12 mb-16">
+                      <ProHeader icon={Clapperboard} title="DAILY" highlight="AUTO" subtitle="Finds and posts content automatically for you" />
+                      <div className="flex gap-4 w-full lg:w-auto">
+                        <button onClick={handleRunAnime} className="ghost-elite-btn px-10 py-5 flex-1 shadow-md uppercase text-[12px] italic font-black">RUN NOW</button>
+                        <button onClick={handleActivateDaily} className={`pro-btn-elite px-14 py-5 flex-1 text-[12px] ${autoAnimeConfig?.enabled ? "from-rose-600 to-rose-700" : ""}`}>{autoAnimeConfig?.enabled ? "DEACTIVATE DAILY" : "ACTIVATE DAILY"}</button>
                       </div>
                     </div>
-                  </div>
+                    {autoAnimeMessage && <div className="mb-12 p-6 bg-cyan-50 rounded-3xl text-[12px] font-black text-cyan-900 uppercase italic text-center border-2 border-white shadow-inner">{autoAnimeMessage}</div>}
+                    
+                    <div className="grid gap-12 lg:grid-cols-2">
+                      <div className="space-y-12 p-10 bg-slate-50/50 rounded-[40px] border border-slate-100 shadow-inner group">
+                         <div className="flex items-center justify-between pb-4 border-b border-white">
+                            <p className="text-[13px] font-black uppercase tracking-[0.4em] text-slate-500 italic">Content Filters</p>
+                            <Filter size={20} className="text-slate-300" />
+                         </div>
+                         <div className="space-y-8">
+                            <div className="space-y-3">
+                               <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">What to post — Reels or Photos?</p>
+                               <div className="flex bg-white p-2 rounded-2xl border-2 border-slate-100 shadow-sm">
+                                  {[ { id: "reel", label: "REELS", icon: Film }, { id: "post", label: "PHOTOS", icon: ImageIcon }, { id: "both", label: "BOTH", icon: Layers } ].map(m => (
+                                    <button key={m.id} onClick={() => handleUpdateAutoAnime({ contentType: m.id })} className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-xl text-[11px] font-black transition-all ${autoAnimeConfig?.contentType === m.id ? "bg-slate-900 text-white shadow-xl" : "text-slate-500 hover:bg-slate-50"}`}>
+                                      <m.icon size={14} /> {m.label}
+                                    </button>
+                                  ))}
+                               </div>
+                            </div>
+                            <div className="space-y-3">
+                               <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Where to find content?</p>
+                               <div className="flex bg-white p-2 rounded-2xl border-2 border-slate-100 shadow-sm">
+                                  {[ { id: "reddit", label: "REDDIT API", icon: Globe }, { id: "instagram", label: "INSTA CRAWL", icon: Radar } ].map(p => (
+                                    <button key={p.id} onClick={() => handleUpdateAutoAnime({ sourcePlatform: p.id })} className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-xl text-[11px] font-black transition-all ${autoAnimeConfig?.sourcePlatform === p.id ? "bg-slate-900 text-white shadow-xl" : "text-slate-500 hover:bg-slate-50"}`}>
+                                      <p.icon size={14} /> {p.label}
+                                    </button>
+                                  ))}
+                               </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-6">
+                               <div className="relative"><input type="number" value={autoAnimeConfig?.minScore || 0} onChange={e => handleUpdateAutoAnime({ minScore: parseInt(e.target.value) })} className="w-full pt-10 pb-5 px-8 font-black text-lg border-2 border-white rounded-2xl bg-white shadow-sm" /><p className="absolute left-8 top-[-8px] text-[9px] font-black uppercase bg-white px-3 py-0.5 rounded-full text-slate-400 border border-slate-100">MIN SCORE</p></div>
+                               <div className="relative"><input type="number" value={autoAnimeConfig?.maxAgeHours || 0} onChange={e => handleUpdateAutoAnime({ maxAgeHours: parseInt(e.target.value) })} className="w-full pt-10 pb-5 px-8 font-black text-lg border-2 border-white rounded-2xl bg-white shadow-sm" /><p className="absolute left-8 top-[-8px] text-[9px] font-black uppercase bg-white px-3 py-0.5 rounded-full text-slate-400 border border-slate-100">MAX AGE (HR)</p></div>
+                            </div>
+                         </div>
+                      </div>
 
-                  <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-                    <div className="rounded-xl border border-slate-200 bg-white/80 p-3">
-                      <p className="muted-text text-xs">Total Likes</p>
-                      <p className="mt-1 text-lg font-bold font-display">{formatNumber(instagramDetails.totals?.likes || 0)}</p>
+                      <div className="space-y-10 p-10 bg-slate-50/50 rounded-[28px] border border-slate-100">
+                         <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                            <div>
+                              <p className="text-[14px] font-black text-slate-800 uppercase">Post Times</p>
+                              <p className="text-[11px] text-slate-400 mt-1">The times your content will auto-post every day</p>
+                            </div>
+                            <Zap size={18} className="text-amber-400" />
+                         </div>
+                         <div className="grid grid-cols-3 gap-4">
+                           {autoAnimeConfig?.timeSlots?.map(s => (
+                              <div key={s} className="bg-white border border-slate-100 rounded-2xl px-4 py-6 shadow-sm flex flex-col items-center gap-2 group hover:border-rose-200 transition-all">
+                                 <Zap size={16} className="text-amber-400" />
+                                 <span className="text-[18px] font-black text-slate-950 tracking-tight">{s}</span>
+                                 <button onClick={() => handleRemoveTimeSlot(s)} className="text-[10px] font-black text-rose-400 hover:text-rose-600 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-all">Remove</button>
+                              </div>
+                           ))}
+                         </div>
+                         <div className="flex gap-4 pt-2">
+                           <div className="flex-1 relative">
+                             <input type="time" value={newTimeSlot} onChange={e => setNewTimeSlot(e.target.value)} className="w-full pro-field pr-4" placeholder="09:00" />
+                             <p className="absolute left-4 top-[-8px] text-[9px] font-black uppercase bg-white px-2 py-0.5 rounded-full text-slate-400 border border-slate-100">NEW TIME</p>
+                           </div>
+                           <button onClick={handleAddTimeSlot} className="pro-btn-elite px-8">+ ADD</button>
+                         </div>
+                      </div>
                     </div>
-                    <div className="rounded-xl border border-slate-200 bg-white/80 p-3">
-                      <p className="muted-text text-xs">Total Comments</p>
-                      <p className="mt-1 text-lg font-bold font-display">{formatNumber(instagramDetails.totals?.comments || 0)}</p>
-                    </div>
-                    <div className="rounded-xl border border-slate-200 bg-white/80 p-3">
-                      <p className="muted-text text-xs">Total Views</p>
-                      <p className="mt-1 text-lg font-bold font-display">{formatNumber(instagramDetails.totals?.views || 0)}</p>
-                    </div>
-                    <div className="rounded-xl border border-slate-200 bg-white/80 p-3">
-                      <p className="muted-text text-xs">Total Reach</p>
-                      <p className="mt-1 text-lg font-bold font-display">{formatNumber(instagramDetails.totals?.reach || 0)}</p>
-                    </div>
-                  </div>
+                 </ProCard>
+              </motion.div>
+            )}
 
-                  <div className="mt-5 space-y-3 md:hidden">
-                    {(instagramDetails.recentMedia || []).map((item) => (
-                      <article key={item.id} className="rounded-xl border border-slate-200 bg-white/85 p-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="status-pill bg-slate-100 text-slate-700">{item.mediaType}</span>
-                          <p className="text-[11px] text-slate-500">{formatDate(item.timestamp)}</p>
-                        </div>
-                        <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
-                          <div className="rounded-lg bg-slate-100/80 px-2 py-1.5">
-                            <p className="muted-text">Likes</p>
-                            <p className="font-semibold">{formatNumber(item.likeCount)}</p>
-                          </div>
-                          <div className="rounded-lg bg-slate-100/80 px-2 py-1.5">
-                            <p className="muted-text">Comments</p>
-                            <p className="font-semibold">{formatNumber(item.commentCount)}</p>
-                          </div>
-                          <div className="rounded-lg bg-slate-100/80 px-2 py-1.5">
-                            <p className="muted-text">Views</p>
-                            <p className="font-semibold">{formatNumber(item.views)}</p>
-                          </div>
-                          <div className="rounded-lg bg-slate-100/80 px-2 py-1.5">
-                            <p className="muted-text">Reach</p>
-                            <p className="font-semibold">{formatNumber(item.reach)}</p>
-                          </div>
-                          <div className="rounded-lg bg-slate-100/80 px-2 py-1.5">
-                            <p className="muted-text">Impressions</p>
-                            <p className="font-semibold">{formatNumber(item.impressions)}</p>
-                          </div>
-                        </div>
-                      </article>
-                    ))}
+            {activeTab === "pending" && (
+              <motion.div key="pending" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-12">
+                 <ProCard>
+                   <ProHeader icon={LayoutDashboard} title="QUEUED" highlight="POSTS" subtitle="All posts waiting to be uploaded to Instagram" />
+                   <div className="grid gap-8">
+                     {pendingPosts.map(post => {
+                       const pct = getProgressForPost(post);
+                       return (
+                         <div key={post._id} className="flex flex-col md:flex-row items-center gap-10 bg-slate-50/50 rounded-[40px] p-10 border border-slate-100 shadow-sm hover:shadow-xl transition-all group">
+                           <div className="w-32 h-32 bg-slate-950 rounded-[32px] overflow-hidden shadow-lg border-[6px] border-white ring-2 ring-slate-100/50">{post.mediaUrl && (post.postType === "reel" ? <video src={post.mediaUrl} /> : <img src={post.mediaUrl} className="w-full h-full object-cover" />)}</div>
+                           <div className="flex-1 space-y-4 text-center md:text-left">
+                             <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 mb-2">
+                               <span className={`status-pro ${post.status === "processing" ? "bg-cyan-50 text-cyan-950 border-cyan-100" : "bg-white text-slate-950 border-slate-100 shadow-sm"}`}>{String(post.status).toUpperCase()}</span>
+                               <p className="text-[17px] font-black uppercase text-slate-950 italic tracking-tighter">{post.postType} Post</p>
+                             </div>
+                             <p className="text-[13px] font-semibold text-slate-500 uppercase tracking-widest">SCHEDULED: {formatDate(post.scheduledTime)}</p>
+                           </div>
+                           <div className="w-full md:w-56 h-3 bg-slate-100 rounded-full overflow-hidden shadow-inner border border-white"><motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} className="h-full bg-gradient-to-r from-cyan-600 to-emerald-600 rounded-full" /></div>
+                           <button className="p-6 rounded-3xl bg-rose-50 border-2 border-white text-rose-600 hover:bg-rose-600 hover:text-white transition-all shadow-sm"><Trash2 size={24} /></button>
+                         </div>
+                       );
+                     })}
+                      {!pendingPosts.length && <div className="p-32 text-center text-[14px] font-semibold text-slate-300">No posts in queue. Schedule a post to get started.</div>}
+                   </div>
+                 </ProCard>
+              </motion.div>
+            )}
 
-                    {!instagramDetails.recentMedia?.length && (
-                      <p className="rounded-xl border border-slate-200 bg-white/85 px-3 py-4 text-center text-sm text-slate-500">
-                        No media analytics available.
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="mt-5 hidden overflow-x-auto md:block">
-                    <table className="w-full min-w-[760px] text-left text-sm">
-                      <thead className="text-slate-600">
-                        <tr className="border-b border-slate-200">
-                          <th className="py-2">Type</th>
-                          <th className="py-2">Date</th>
-                          <th className="py-2">Likes</th>
-                          <th className="py-2">Comments</th>
-                          <th className="py-2">Views</th>
-                          <th className="py-2">Reach</th>
-                          <th className="py-2">Impressions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(instagramDetails.recentMedia || []).map((item) => (
-                          <tr key={item.id} className="border-b border-slate-100">
-                            <td className="py-2">{item.mediaType}</td>
-                            <td className="py-2">{formatDate(item.timestamp)}</td>
-                            <td className="py-2">{formatNumber(item.likeCount)}</td>
-                            <td className="py-2">{formatNumber(item.commentCount)}</td>
-                            <td className="py-2">{formatNumber(item.views)}</td>
-                            <td className="py-2">{formatNumber(item.reach)}</td>
-                            <td className="py-2">{formatNumber(item.impressions)}</td>
-                          </tr>
-                        ))}
-                        {!instagramDetails.recentMedia?.length && (
+            {activeTab === "history" && (
+              <motion.div key="history" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-12">
+                 <ProCard>
+                     <ProHeader icon={HistoryIcon} title="HISTORY" highlight="LOGS" subtitle="All your previous posts and their results" />
+                    <div className="overflow-x-auto custom-scrollbar">
+                      <table className="w-full text-left text-[14px] font-black uppercase tracking-tight">
+                        <thead className="text-slate-500 border-b border-slate-100">
                           <tr>
-                            <td colSpan={7} className="py-5 text-center text-slate-500">
-                              No media analytics available.
-                            </td>
+                             <th className="py-8 px-6">TYPE</th>
+                             <th className="py-8 px-6">DATE</th>
+                             <th className="py-8 px-6">STATUS</th>
+                             <th className="py-8 px-6">RESULT</th>
                           </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              )}
-            </section>
-          )}
-
-          {activeTab === "insights" && instagramStatus && !instagramStatus.valid && (
-            <section className="glass-panel rounded-2xl border border-red-500/30 bg-red-500/10 p-4">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="mt-0.5 flex-shrink-0 text-red-400" size={18} />
-                <div>
-                  <p className="text-sm font-semibold text-red-300">Instagram Token Invalid</p>
-                  <p className="mt-1 text-xs text-red-200">{instagramStatus.error}</p>
-                  <p className="mt-2 text-xs text-red-200">Update your Instagram access token in the .env file and restart the server.</p>
-                </div>
-              </div>
-            </section>
-          )}
-
-          {activeTab === "schedule" && (
-            <section className="grid gap-5 xl:grid-cols-[1fr_340px]">
-              <motion.form
-                onSubmit={submitSchedule}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.45 }}
-                className="glass-panel rounded-2xl p-5 md:p-6"
-              >
-                <h3 className="text-xl font-bold font-display">Schedule New Upload</h3>
-                <p className="mt-1 text-sm text-muted">
-                  Upload MP4 with audio for reels, or use a public media URL.
-                </p>
-
-                <label className="mt-4 inline-flex items-center gap-2 text-sm text-muted">
-                  <input
-                    type="checkbox"
-                    checked={autoGenerateText}
-                    onChange={(e) => setAutoGenerateText(e.target.checked)}
-                  />
-                  Auto-generate caption + keywords + hashtags on upload
-                </label>
-
-                {/* Input mode toggle */}
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setInputMode("upload");
-                      setExtractError("");
-                      setMediaUrl("");
-                    }}
-                    className={`tab-btn flex items-center gap-1.5 ${inputMode === "upload" ? "active" : "inactive"}`}
-                  >
-                    <Upload size={13} /> Upload File
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setInputMode("direct");
-                      setExtractError("");
-                      setMediaFile(null);
-                      setMediaPreview("");
-                    }}
-                    className={`tab-btn flex items-center gap-1.5 ${inputMode === "direct" ? "active" : "inactive"}`}
-                  >
-                    <Link2 size={13} /> Direct URL
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setInputMode("instagram");
-                      setExtractError("");
-                      setMediaFile(null);
-                      setMediaPreview("");
-                    }}
-                    className={`tab-btn flex items-center gap-1.5 ${inputMode === "instagram" ? "active" : "inactive"}`}
-                  >
-                    <Download size={13} /> Instagram URL
-                  </button>
-                </div>
-
-                {inputMode === "upload" && (
-                  <label className="mt-4 block text-sm text-muted">
-                    Upload media file (MP4/MOV/JPG/PNG/WEBP)
-                    <input
-                      type="file"
-                      accept={postType === "reel" ? "video/mp4,video/quicktime" : "image/jpeg,image/png,image/webp,video/mp4,video/quicktime"}
-                      onChange={handleFileChange}
-                      className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800 file:mr-3 file:rounded-lg file:border-0 file:bg-cyan-300 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-slate-950"
-                    />
-                    <p className="mt-2 text-xs text-muted">
-                      For reels, upload MP4 with audio. File is uploaded first, then scheduled.
-                    </p>
-                    <p className="mt-1 text-xs text-amber-300">
-                      Tip: for real Instagram publishing, media URL must be publicly reachable (not localhost).
-                    </p>
-                  </label>
-                )}
-
-                {/* Instagram URL extractor */}
-                {inputMode === "instagram" && (
-                  <div className="mt-4">
-                    <label className="block text-sm text-muted">
-                      Instagram post / reel URL
-                      <div className="mt-2 flex gap-2">
-                        <input
-                          type="url"
-                          placeholder="https://www.instagram.com/reel/ABC123/"
-                          value={instagramUrl}
-                          onChange={(e) => { setInstagramUrl(e.target.value); setExtractError(""); }}
-                          className="field-base flex-1 px-3 py-2 text-sm text-slate-800"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleExtract}
-                          disabled={extracting || !instagramUrl.trim()}
-                          className="pro-btn whitespace-nowrap px-4 py-2 text-sm disabled:opacity-60"
-                        >
-                          {extracting ? "Extracting..." : "Extract Media"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleExtractAndAutoPost}
-                          disabled={autoPostingFromLink || !instagramUrl.trim()}
-                          className="ghost-btn whitespace-nowrap px-4 py-2 text-sm disabled:opacity-60"
-                        >
-                          {autoPostingFromLink ? "Auto Posting..." : "Auto Post Now"}
-                        </button>
-                      </div>
-                    </label>
-                    {extractError && <p className="mt-2 text-sm text-red-400">{extractError}</p>}
-                    {mediaUrl && !extractError && (
-                      <p className="mt-2 text-xs text-emerald-400">Media extracted — check preview on the right, then set a schedule time and caption below.</p>
-                    )}
-                  </div>
-                )}
-
-                <div className="mt-5 grid gap-4 md:grid-cols-2">
-                  <label className="text-sm text-muted">
-                    Post type
-                    <select
-                      value={postType}
-                      onChange={(e) => setPostType(e.target.value)}
-                      className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
-                    >
-                      <option value="reel">Reel</option>
-                      <option value="post">Image Post</option>
-                    </select>
-                  </label>
-
-                  <label className="text-sm text-muted">
-                    Schedule time
-                    <input
-                      required
-                      type="datetime-local"
-                      value={scheduledTime}
-                      onChange={(e) => setScheduledTime(e.target.value)}
-                      className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
-                    />
-                  </label>
-                </div>
-
-                {inputMode !== "upload" && (
-                  <label className="mt-4 block text-sm text-muted">
-                    {inputMode === "direct" ? "Media URL" : "Extracted Media URL (read-only)"}
-                    <input
-                      required
-                      type="url"
-                      placeholder={postType === "reel" ? "https://.../video.mp4" : "https://.../image.jpg"}
-                      value={mediaUrl}
-                      readOnly={inputMode === "instagram"}
-                      onChange={(e) => inputMode === "direct" && setMediaUrl(e.target.value)}
-                      className={`field-base mt-2 w-full px-3 py-2 text-sm text-slate-800 ${inputMode === "instagram" ? "cursor-default opacity-60" : ""}`}
-                    />
-                  </label>
-                )}
-
-                <label className="mt-4 block text-sm text-muted">
-                  Caption
-                  <textarea
-                    rows={5}
-                    placeholder="Write your Instagram caption..."
-                    value={caption}
-                    onChange={(e) => setCaption(e.target.value)}
-                    className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
-                  />
-                </label>
-
-                {!!generatedKeywords.length && (
-                  <div className="mt-3">
-                    <p className="text-xs text-muted">Generated keywords</p>
-                    <div className="mt-1 flex flex-wrap gap-2">
-                      {generatedKeywords.map((keyword) => (
-                        <span key={keyword} className="status-pill bg-slate-200/80 text-slate-700">
-                          {keyword}
-                        </span>
-                      ))}
+                        </thead>
+                        <tbody className="text-slate-950">
+                          {history.slice(0, 20).map(item => (
+                            <tr key={item._id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-all font-black">
+                              <td className="py-10 px-6 italic font-black text-slate-900">{item.postType}</td>
+                              <td className="py-10 px-6 text-slate-600">{formatDate(item.updatedAt)}</td>
+                              <td className="py-10 px-6"><span className={`status-pro ${item.status === "posted" ? "bg-emerald-50 text-emerald-950 border-emerald-100" : "bg-rose-50 text-rose-950 border-rose-100"}`}>{item.status}</span></td>
+                               <td className="py-10 px-6 text-[13px] text-slate-500">{item.status === "posted" ? "Posted successfully on Instagram." : "Failed to post. Please check your Instagram token."}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                  </div>
-                )}
+                     {!history.length && <div className="p-32 text-center text-[14px] font-semibold text-slate-300">No posts yet. Your history will show up here after posts go live.</div>}
+                 </ProCard>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-                {!!generatedHashtags.length && (
-                  <div className="mt-3">
-                    <p className="text-xs text-muted">Generated hashtags</p>
-                    <div className="mt-1 flex flex-wrap gap-2">
-                      {generatedHashtags.map((tag) => (
-                        <span key={tag} className="status-pill bg-cyan-500/20 text-cyan-200">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {message && <p className="mt-4 text-sm text-accent">{message}</p>}
-
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="pro-btn mt-6 px-5 py-3 text-sm disabled:opacity-70"
-                >
-                  {submitting ? "Scheduling..." : "Schedule Post"}
-                </button>
-              </motion.form>
-
-              <motion.aside
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.45 }}
-                className="glass-panel rounded-2xl p-5"
-              >
-                <h4 className="text-base font-bold font-display">Media Preview</h4>
-                <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white/75 p-2">
-                  {mediaPreview || mediaUrl ? (
-                    <>
-                      {postType === "reel" ? (
-                        <video controls src={mediaPreview || mediaUrl} className="h-64 w-full rounded-lg object-cover" />
-                      ) : (
-                        <img src={mediaPreview || mediaUrl} alt="Selected media" className="h-64 w-full rounded-lg object-cover" />
-                      )}
-                      <p className="mt-2 truncate text-xs text-muted">{mediaFile?.name || mediaUrl}</p>
-                    </>
-                  ) : (
-                    <div className="flex h-64 items-center justify-center text-sm text-muted">
-                      No media URL entered
-                    </div>
-                  )}
-                </div>
-              </motion.aside>
-            </section>
-          )}
-
-          {activeTab === "animeAutomation" && (
-            <AnimeAutoSection 
-              autoAnimeLoading={autoAnimeLoading}
-              autoAnimeConfig={autoAnimeConfig}
-              autoAnimeRunning={autoAnimeRunning}
-              autoAnimeActivating={autoAnimeActivating}
-              autoAnimeSaving={autoAnimeSaving}
-              autoAnimeMessage={autoAnimeMessage}
-              newTimeSlot={newTimeSlot}
-              setNewTimeSlot={setNewTimeSlot}
-              runAutoAnimeNow={runAutoAnimeNow}
-              toggleDailyAutoSchedule={toggleDailyAutoSchedule}
-              updateAutoAnimeField={updateAutoAnimeField}
-              addTimeSlot={addTimeSlot}
-              removeTimeSlot={removeTimeSlot}
-              saveAutoAnimeConfig={saveAutoAnimeConfig}
-            />
-          )}
-
-          {activeTab === "pending" && (
-            <PendingQueueSection 
-              pendingPosts={pendingPosts}
-              handleDeleteLocalMedia={handleDeleteLocalMedia}
-              handleCancelPost={handleCancelPost}
-              hasDeletableLocalMedia={hasDeletableLocalMedia}
-              mediaDeleteInProgress={mediaDeleteInProgress}
-              postCancelInProgress={postCancelInProgress}
-              formatDate={formatDate}
-            />
-          )}
-
-          {activeTab === "history" && (
-            <HistorySection 
-              historyView={historyView}
-              history={history}
-              handleDeleteLocalMedia={handleDeleteLocalMedia}
-              handleCancelPost={handleCancelPost}
-              hasDeletableLocalMedia={hasDeletableLocalMedia}
-              mediaDeleteInProgress={mediaDeleteInProgress}
-              postCancelInProgress={postCancelInProgress}
-              formatDate={formatDate}
-            />
-          )}
         </main>
       </div>
-
-      {activeToast && (
-        <div className="dynamic-island-wrap" aria-live="polite" aria-atomic="true">
-          <div className={`dynamic-island fade-rise tone-${activeToast.tone || "info"}`}>
-            <span className="dynamic-island-pulse" />
-            <div className="dynamic-island-copy">
-              <p className="dynamic-island-title">{activeToast.title}</p>
-              {activeToast.description && <p className="dynamic-island-desc">{activeToast.description}</p>}
-            </div>
-            {toasts.length > 1 && <span className="dynamic-island-count">+{toasts.length - 1}</span>}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
