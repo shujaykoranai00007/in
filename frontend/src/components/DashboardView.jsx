@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, memo } from "react";
+import { useEffect, useMemo, useState, useCallback, memo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Activity,
@@ -13,6 +13,7 @@ import {
   Gamepad2,
   RefreshCcw,
   CheckCircle,
+  XCircle,
   Cpu,
   TrendingUp,
   Globe,
@@ -21,7 +22,10 @@ import {
   Image as ImageIcon,
   Layers,
   Radar,
-  ChevronRight
+  Loader2,
+  BellRing,
+  ChevronRight,
+  X
 } from "lucide-react";
 import api from "../services/api";
 import Sidebar from "./Sidebar";
@@ -36,6 +40,45 @@ const containerStagger = { animate: { transition: { staggerChildren: 0.1 } } };
 function formatDate(dateString) { if (!dateString) return "Pending"; return new Date(dateString).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
 function formatShortNumber(num) { if (num === undefined || num === null) return "0"; if (num >= 1000000) return (num / 1000000).toFixed(1) + "M"; if (num >= 1000) return (num / 1000).toFixed(1) + "K"; return num.toString(); }
 function getProgressForPost(post) { const s = String(post?.status || "").toLowerCase(); return s === "posted" || s === "failed" ? 100 : (s === "processing" ? 75 : 0); }
+
+// --- TOAST SYSTEM ---
+const TOAST_ICONS = {
+  success: <CheckCircle size={18} className="text-emerald-500 flex-shrink-0" />,
+  error:   <XCircle size={18} className="text-rose-500 flex-shrink-0" />,
+  info:    <BellRing size={18} className="text-cyan-500 flex-shrink-0" />,
+  loading: <Loader2 size={18} className="text-amber-500 animate-spin flex-shrink-0" />,
+};
+
+const TOAST_COLORS = {
+  success: "border-emerald-100 bg-emerald-50",
+  error:   "border-rose-100 bg-rose-50",
+  info:    "border-cyan-100 bg-cyan-50",
+  loading: "border-amber-100 bg-amber-50",
+};
+
+const Toast = memo(({ toasts, onDismiss }) => (
+  <div className="fixed top-6 right-6 z-[9999] flex flex-col gap-3 w-[360px] pointer-events-none">
+    <AnimatePresence mode="sync">
+      {toasts.map(t => (
+        <motion.div
+          key={t.id}
+          initial={{ opacity: 0, x: 80, scale: 0.95 }}
+          animate={{ opacity: 1, x: 0, scale: 1 }}
+          exit={{ opacity: 0, x: 80, scale: 0.9 }}
+          transition={{ type: "spring", stiffness: 260, damping: 22 }}
+          className={`pointer-events-auto flex items-start gap-4 p-5 rounded-2xl border shadow-xl ${TOAST_COLORS[t.type] || TOAST_COLORS.info}`}
+        >
+          {TOAST_ICONS[t.type]}
+          <div className="flex-1 min-w-0">
+            <p className="text-[13px] font-black text-slate-800">{t.title}</p>
+            {t.message && <p className="text-[12px] text-slate-500 mt-0.5 leading-snug">{t.message}</p>}
+          </div>
+          <button onClick={() => onDismiss(t.id)} className="text-slate-400 hover:text-slate-700 flex-shrink-0"><X size={16} /></button>
+        </motion.div>
+      ))}
+    </AnimatePresence>
+  </div>
+));
 
 // --- PROFESSIONAL ELITE COMPONENTS ---
 
@@ -294,6 +337,17 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
   const [autoAnimeConfig, setAutoAnimeConfig] = useState(null);
   const [autoAnimeMessage, setAutoAnimeMessage] = useState("");
   const [newTimeSlot, setNewTimeSlot] = useState("");
+  const [runningNow, setRunningNow] = useState(false);
+  const [toasts, setToasts] = useState([]);
+
+  const addToast = useCallback((type, title, message, duration = 6000) => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, type, title, message }]);
+    if (type !== "loading") setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), duration);
+    return id;
+  }, []);
+
+  const dismissToast = useCallback((id) => setToasts(prev => prev.filter(t => t.id !== id)), []);
 
   const loadPosts = async () => { try { const [{ data: pending }, { data: hist }] = await Promise.all([api.get("/posts?status=pending,processing"), api.get("/posts/history")]); setPendingPosts(pending); setHistory(hist); } catch {} };
   const loadDetails = async () => { 
@@ -337,12 +391,21 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
   };
 
   const handleRunAnime = async () => {
+    if (runningNow) return;
+    setRunningNow(true);
+    const loadingId = addToast("loading", "Starting automation...", "Finding content and preparing your post. This takes 60-90 seconds.", 0);
     try {
       const res = await api.post("/auto-anime/run-now");
-      setAutoAnimeMessage(res?.data?.message || "Running automation now — check Queue in 60 seconds.");
-      setTimeout(() => setAutoAnimeMessage(""), 8000);
+      dismissToast(loadingId);
+      addToast("success", "Automation started!", res?.data?.message || "Check the Queued Posts tab in about 60-90 seconds to see your post.", 10000);
       loadPosts();
-    } catch { setAutoAnimeMessage("Failed to trigger run. Is the backend online?"); }
+      setTimeout(() => { loadPosts(); setActiveTab("pending"); }, 5000);
+    } catch (e) {
+      dismissToast(loadingId);
+      addToast("error", "Run failed", e?.response?.data?.message || "Could not reach the server. Is the backend running?", 8000);
+    } finally {
+      setRunningNow(false);
+    }
   };
 
   const handleActivateDaily = async () => {
@@ -350,9 +413,18 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
       const payload = { enabled: !autoAnimeConfig?.enabled };
       const res = await api.post("/auto-anime/activate-daily", payload);
       setAutoAnimeConfig(res?.data?.config || { ...autoAnimeConfig, ...payload });
-      setAutoAnimeMessage(res?.data?.message || (payload.enabled ? "Daily automation activated." : "Daily automation deactivated."));
+      const isOn = payload.enabled;
+      addToast(
+        isOn ? "success" : "info",
+        isOn ? "Daily automation is ON" : "Daily automation is OFF",
+        isOn
+          ? `Posts will go live at your scheduled times: ${(res?.data?.config?.timeSlots || []).join(", ")}`
+          : "Automation paused. Toggle again to re-enable.",
+        7000
+      );
+      setAutoAnimeMessage(res?.data?.message || (isOn ? "Daily automation activated." : "Daily automation deactivated."));
       setTimeout(() => setAutoAnimeMessage(""), 6000);
-    } catch { setAutoAnimeMessage("Failed to toggle daily automation."); }
+    } catch { addToast("error", "Action failed", "Could not toggle daily automation. Check your backend.", 6000); }
   };
   const handleAddTimeSlot = async () => {
     const timePattern = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -385,6 +457,7 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
 
   return (
     <div className="flex min-h-screen bg-white text-slate-900" style={{ fontFamily: 'Inter, sans-serif' }}>
+      <Toast toasts={toasts} onDismiss={dismissToast} />
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} user={user} onLogout={onLogout} />
       
       <div className="flex-1 lg:ml-[320px] p-8 lg:p-14 overflow-x-hidden">
@@ -535,16 +608,30 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
                  ) : null}
               </motion.div>
             )}
-
-            {activeTab === "animeAutomation" && (
+{activeTab === "animeAutomation" && (
               <motion.div key="auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-12">
                  <ProCard>
                     <div className="flex flex-col lg:flex-row justify-between items-start gap-12 mb-16">
                       <ProHeader icon={Clapperboard} title="DAILY" highlight="AUTO" subtitle="Finds and posts content automatically for you" />
                       <div className="flex gap-4 w-full lg:w-auto">
-                        <button onClick={handleRunAnime} className="ghost-elite-btn px-10 py-5 flex-1 shadow-md uppercase text-[12px] italic font-black">RUN NOW</button>
-                        <button onClick={handleActivateDaily} className={`pro-btn-elite px-14 py-5 flex-1 text-[12px] ${autoAnimeConfig?.enabled ? "from-rose-600 to-rose-700" : ""}`}>{autoAnimeConfig?.enabled ? "DEACTIVATE DAILY" : "ACTIVATE DAILY"}</button>
-                      </div>
+                         <button
+                           onClick={handleRunAnime}
+                           disabled={runningNow}
+                           className={`ghost-elite-btn px-10 py-5 flex-1 text-[12px] font-black inline-flex items-center justify-center gap-3 ${runningNow ? "opacity-70 cursor-not-allowed border-amber-200 text-amber-700" : ""}`}
+                         >
+                           {runningNow
+                             ? <><Loader2 size={15} className="animate-spin" /> Running...</>
+                             : "Run Now"
+                           }
+                         </button>
+                         <button
+                           onClick={handleActivateDaily}
+                           className={`pro-btn-elite px-14 py-5 flex-1 text-[12px] ${autoAnimeConfig?.enabled ? "!bg-none !bg-rose-600 shadow-rose-200" : ""}`}
+                           style={autoAnimeConfig?.enabled ? { background: "#e11d48" } : {}}
+                         >
+                           {autoAnimeConfig?.enabled ? "Stop Daily Auto" : "Start Daily Auto"}
+                         </button>
+                       </div>
                     </div>
                     {autoAnimeMessage && <div className="mb-12 p-6 bg-cyan-50 rounded-3xl text-[12px] font-black text-cyan-900 uppercase italic text-center border-2 border-white shadow-inner">{autoAnimeMessage}</div>}
                     
