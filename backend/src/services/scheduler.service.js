@@ -113,10 +113,11 @@ async function recoverStaleProcessingPosts() {
 }
 
 async function processLockedPost(lockedPost) {
+  console.log(`[Scheduler] 🚀 Processing post ${lockedPost._id} (${lockedPost.postType})`);
   const uploadResult = await uploadOnce(lockedPost);
   const nextAttempts = Number(lockedPost.attempts || 0) + 1;
 
-  if (uploadResult.success) {
+    console.log(`[Scheduler] ✅ Successfully published post ${lockedPost._id}. Permalink: ${uploadResult.result.publishedDetails?.permalink || "N/A"}`);
     const successUpdate = {
       status: "posted",
       postedAt: new Date(),
@@ -162,6 +163,7 @@ async function processLockedPost(lockedPost) {
   }
 
   if (uploadResult.pending) {
+    console.log(`[Scheduler] ⏳ Post ${lockedPost._id} is still processing on Instagram. Retrying in ${REEL_WAIT_RETRY_MINUTES}m.`);
     await Post.updateOne(
       { _id: lockedPost._id },
       {
@@ -177,16 +179,18 @@ async function processLockedPost(lockedPost) {
   }
 
   const failureMessage = extractFailureMessage(uploadResult.error);
+  console.error(`[Scheduler] ❌ Post ${lockedPost._id} failed: ${failureMessage}`);
 
   // Build user-friendly error message
   let displayError = failureMessage;
   if (isTunnelOrUrlError(uploadResult.error)) {
-    displayError = `Instagram could not download media. PUBLIC_BASE_URL must be publicly reachable. Set up a tunnel (ngrok.io, cloudflare, etc.) and update .env PUBLIC_BASE_URL. Error: ${failureMessage}`;
+    displayError = `Instagram Fetch Error (2207076): Your server's URL is not reachable by Instagram. Ensure PUBLIC_BASE_URL is set correctly in your host environment.`;
   }
 
   const shouldRetry = isRetryableInstagramError(uploadResult.error) && nextAttempts < MAX_RETRIES;
 
   if (shouldRetry) {
+    console.log(`[Scheduler] 🔄 Retrying post ${lockedPost._id} (Attempt ${nextAttempts + 1}/${MAX_RETRIES}) in ${RETRY_GAP_SECONDS}s`);
     await Post.updateOne(
       { _id: lockedPost._id },
       {
@@ -201,6 +205,7 @@ async function processLockedPost(lockedPost) {
     return { state: "pending-retry" };
   }
 
+  console.error(`[Scheduler] 🛑 Post ${lockedPost._id} permanently failed after ${nextAttempts} attempts.`);
   await Post.updateOne(
     { _id: lockedPost._id },
     {

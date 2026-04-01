@@ -85,7 +85,12 @@ function validateInstagramImageUrl(mediaUrl) {
 }
 
 function getPublicBaseUrl() {
-  const candidates = [process.env.RENDER_EXTERNAL_URL, process.env.PUBLIC_BASE_URL];
+  const candidates = [
+    process.env.RENDER_EXTERNAL_URL,
+    process.env.PUBLIC_BASE_URL,
+    process.env.RAILWAY_STATIC_URL,
+    process.env.HEROKU_APP_NAME ? `https://${process.env.HEROKU_APP_NAME}.herokuapp.com` : ""
+  ];
 
   for (const candidate of candidates) {
     const configured = String(candidate || "").trim();
@@ -94,7 +99,7 @@ function getPublicBaseUrl() {
     }
 
     try {
-      const parsed = new URL(configured);
+      const parsed = new URL(configured.startsWith("http") ? configured : `https://${configured}`);
       if (!["http:", "https:"].includes(parsed.protocol)) {
         continue;
       }
@@ -609,30 +614,44 @@ export async function createMediaContainer(post) {
     }
 
     const payload = buildContainerPayload(postToCreate);
-    console.log(`[Instagram] Creating container - Type: ${postToCreate.postType}, URL: ${postToCreate.mediaUrl.substring(0, 80)}`);
-    const { data } = await graphApi.post(`/${env.instagramUserId}/media`, null, {
-      params: payload
-    });
+    console.log(`[Instagram] Creating container - Type: ${postToCreate.postType}, URL: ${postToCreate.mediaUrl.substring(0, 100)}`);
+    
+    try {
+      const { data } = await graphApi.post(`/${env.instagramUserId}/media`, null, {
+        params: payload
+      });
 
-    if (!data?.id) {
-      throw new Error("Instagram container creation failed - no creation ID returned");
+      if (!data?.id) {
+        throw new Error("Instagram container creation failed - no creation ID returned");
+      }
+
+      console.log(`[Instagram] Container created successfully: ${data.id} (${postToCreate.postType})`);
+      return { creationId: data.id, mediaUrl: postToCreate.mediaUrl };
+    } catch (createErr) {
+      const apiErr = createErr.response?.data?.error;
+      if (apiErr?.code === 2207076 || apiErr?.message?.includes("download media")) {
+        console.error(`[Instagram] ❌ Fetch Error (2207076): Instagram could not download our media from ${postToCreate.mediaUrl.substring(0, 80)}`);
+        const fetchErr = new Error(`Instagram couldn't download media from ${postToCreate.mediaUrl}`);
+        fetchErr.code = "INSTAGRAM_2207076";
+        fetchErr.response = createErr.response;
+        throw fetchErr;
+      }
+      throw createErr;
     }
-
-    console.log(`[Instagram] Container created successfully: ${data.id} (${postToCreate.postType})`);
-    return { creationId: data.id, mediaUrl: postToCreate.mediaUrl };
   };
 
   try {
     return await createWithPost(post);
   } catch (error) {
     const isLocalhostError = String(error?.message || "").includes("publicly reachable");
-    if ((post.postType === "reel" || post.postType === "post") && 
-        (isInstagramFetchError(error) || isInstagramMediaTypeError(error) || isLocalhostError)) {
+    const isFetchError = isInstagramFetchError(error) || error?.code === "INSTAGRAM_2207076";
+
+    if ((post.postType === "reel" || post.postType === "post") && (isFetchError || isInstagramMediaTypeError(error) || isLocalhostError)) {
       try {
         const token = String(post._id || Date.now()).replace(/[^a-zA-Z0-9_-]/g, "");
-        console.warn(`[Instagram] Trying mirror fallback for ${post.postType} URL: ${post.mediaUrl.substring(0, 80)}`);
+        console.warn(`[Instagram] 🔄 Trying mirror fallback for ${post.postType} due to fetch error. URL: ${post.mediaUrl.substring(0, 80)}`);
         const mirroredUrl = await mirrorMediaToPublicUrl(post.mediaUrl, token);
-        console.warn(`[Instagram] Mirror fallback URL ready: ${mirroredUrl.substring(0, 80)}`);
+        console.warn(`[Instagram] ✅ Mirror fallback URL ready: ${mirroredUrl.substring(0, 80)}`);
 
         const retryPost = {
           ...toPlainPost(post),
@@ -641,7 +660,7 @@ export async function createMediaContainer(post) {
 
         return await createWithPost(retryPost);
       } catch (mirrorError) {
-        console.error(`[Instagram] Mirror fallback failed: ${mirrorError?.message || mirrorError}`);
+        console.error(`[Instagram] ❌ Mirror fallback failed: ${mirrorError?.message || mirrorError}`);
       }
     }
 
@@ -655,7 +674,7 @@ export async function createMediaContainer(post) {
     console.error(`  Post Type: ${post.postType}`);
     console.error(`  Media URL: ${post.mediaUrl.substring(0, 100)}`);
     if (fullError) {
-      console.error(`  Full Error:`, JSON.stringify(fullError, null, 2));
+      console.error(`  Full Error Detail:`, JSON.stringify(fullError, null, 2));
     }
     
     throw buildInstagramServiceError(error, "Failed to create Instagram media container");
@@ -699,8 +718,29 @@ export async function getPublishedMediaDetails(mediaId) {
 }
 
 export async function publishPost(post, onHeartbeat = null) {
+  const isHosted = canHostPublicMedia() && !getPublicBaseUrl().includes("localhost");
+  const isLocalGeneratedFile = String(post.mediaUrl || "").includes("/media/");
+  
+  // Normalization will generate a local file path and update the URL to /media/...
   const preparedPost = await normalizeReelMedia(post);
-  let { creationId, mediaUrl } = await createMediaContainer(preparedPost);
+  
+  // ON HOSTED SERVERS: We must mirror local files to persistent public CDNs.
+  // Render/Heroku have ephemeral filesystems; files will be deleted or server will sleep.
+  // Mirroring ensures Instagram can fetch the file even if our server restarts.
+  let initialPostToUpload = preparedPost;
+  if (isHosted && isLocalGeneratedFile) {
+    try {
+      const token = String(post._id || Date.now()).replace(/[^a-zA-Z0-9_-]/g, "");
+      console.log(`[Instagram] ☁️ Running on Hosted Server. Forcing mirror of local media: ${preparedPost.mediaUrl.substring(0, 60)}`);
+      const mirroredUrl = await mirrorMediaToPublicUrl(preparedPost.mediaUrl, token);
+      console.log(`[Instagram] ☁️ Mirror upload successful: ${mirroredUrl.substring(0, 80)}`);
+      initialPostToUpload = { ...preparedPost, mediaUrl: mirroredUrl };
+    } catch (mirrorErr) {
+      console.warn(`[Instagram] ⚠️ Forced mirror failed: ${mirrorErr.message}. Falling back to default URL.`);
+    }
+  }
+
+  let { creationId, mediaUrl } = await createMediaContainer(initialPostToUpload);
 
   try {
     await waitForContainerReady(creationId, preparedPost.postType, onHeartbeat);
@@ -710,7 +750,7 @@ export async function publishPost(post, onHeartbeat = null) {
     }
 
     const token = String(preparedPost._id || Date.now()).replace(/[^a-zA-Z0-9_-]/g, "");
-    console.warn(`[Instagram] Reel processing failed; trying mirror retry for ${String(mediaUrl || "").substring(0, 80)}`);
+    console.warn(`[Instagram] Reel processing failed; trying secondary mirror retry for ${String(mediaUrl || "").substring(0, 80)}`);
 
     if (onHeartbeat) await onHeartbeat();
     const mirroredUrl = await mirrorMediaToPublicUrl(mediaUrl || preparedPost.mediaUrl, token);

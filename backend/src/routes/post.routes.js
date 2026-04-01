@@ -27,10 +27,11 @@ function getPublicBaseUrl(req) {
   const candidates = [
     process.env.RENDER_EXTERNAL_URL,
     process.env.PUBLIC_BASE_URL,
-    req.get("x-forwarded-host")
+    process.env.RAILWAY_STATIC_URL,
+    process.env.HEROKU_APP_NAME ? `https://${process.env.HEROKU_APP_NAME}.herokuapp.com` : "",
+    req?.get("x-forwarded-host")
       ? `${req.get("x-forwarded-proto") || req.protocol}://${req.get("x-forwarded-host")}`
-      : "",
-    `${req.protocol}://${req.get("host")}`
+      : ""
   ];
 
   for (const candidate of candidates) {
@@ -40,13 +41,8 @@ function getPublicBaseUrl(req) {
     }
 
     try {
-      const parsed = new URL(value);
+      const parsed = new URL(value.startsWith("http") ? value : `https://${value}`);
       if (["http:", "https:"].includes(parsed.protocol)) {
-        const host = parsed.hostname.toLowerCase();
-        if (host.endsWith(".vercel.app") || host.endsWith(".netlify.app")) {
-          continue;
-        }
-
         return parsed.origin;
       }
     } catch {
