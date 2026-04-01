@@ -76,7 +76,23 @@ async function extractWithYtDlp(sourceUrl) {
 
   for (const args of ATTEMPTS) {
     try {
-      const { stdout } = await execFileAsync("python", args, { timeout: 40000 });
+      let stdout;
+      // Strategy: Try 'yt-dlp' binary directly, fallback to 'python -m yt_dlp'
+      try {
+        // Remove '-m' and 'yt_dlp' if calling binary directly
+        const binArgs = args.filter(a => a !== "-m" && a !== "yt_dlp");
+        const res = await execFileAsync("yt-dlp", binArgs, { timeout: 40000 });
+        stdout = res.stdout;
+      } catch (binErr) {
+        if (binErr.code === "ENOENT") {
+          // If yt-dlp binary not found, try python fallback
+          const res = await execFileAsync("python", args, { timeout: 40000 });
+          stdout = res.stdout;
+        } else {
+          throw binErr;
+        }
+      }
+
       const info = JSON.parse(stdout.trim());
       
       const mediaUrl = info.url || 

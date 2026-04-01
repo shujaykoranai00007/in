@@ -244,7 +244,23 @@ async function extractSeparateMediaUrlsWithYtDlp(sourceUrl) {
     "--add-header", "Sec-Ch-Ua-Platform:\"Windows\""
   ];
   try {
-    const { stdout } = await execFileAsync("python", BASE_ARGS.concat(sourceUrl), { timeout: 45000 });
+    let stdout;
+    // Strategy: Try 'yt-dlp' binary directly, fallback to 'python -m yt_dlp'
+    try {
+      // Remove '-m' and 'yt_dlp' if calling binary directly
+      const binArgs = BASE_ARGS.filter(a => a !== "-m" && a !== "yt_dlp");
+      const res = await execFileAsync("yt-dlp", binArgs.concat(sourceUrl), { timeout: 45000 });
+      stdout = res.stdout;
+    } catch (binErr) {
+      if (binErr.code === "ENOENT") {
+        // If yt-dlp binary not found, try python fallback
+        const res = await execFileAsync("python", BASE_ARGS.concat(sourceUrl), { timeout: 45000 });
+        stdout = res.stdout;
+      } else {
+        throw binErr;
+      }
+    }
+
     const info = JSON.parse(stdout.trim());
     
     // Find best video-only and best audio-only

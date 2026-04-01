@@ -117,6 +117,7 @@ async function processLockedPost(lockedPost) {
   const uploadResult = await uploadOnce(lockedPost);
   const nextAttempts = Number(lockedPost.attempts || 0) + 1;
 
+  if (uploadResult.success) {
     console.log(`[Scheduler] ✅ Successfully published post ${lockedPost._id}. Permalink: ${uploadResult.result.publishedDetails?.permalink || "N/A"}`);
     const successUpdate = {
       status: "posted",
