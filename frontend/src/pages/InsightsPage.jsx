@@ -70,34 +70,49 @@ export default function InsightsPage({ instagramDetails, insightsError, onRefres
           )}
 
           {/* Recent Posts Grid */}
-          <div>
-            <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-5">Recent Posts</h3>
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="pt-8">
+            <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-6">Recent Posts Snapshot</h3>
+            <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
               {(instagramDetails.recentMedia || []).map(item => (
-                <div key={item.id} className="bg-white rounded-2xl border border-slate-100 overflow-hidden group hover:shadow-lg transition-all">
-                  <div className="aspect-square bg-slate-100 overflow-hidden">
+                <div key={item.id} className="flex flex-col bg-white rounded-[32px] border border-slate-100 overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 group">
+                  {/* Media Container - Always exactly square and contains the content */}
+                  <div className="relative aspect-square bg-slate-900 border-b border-slate-50 flex items-center justify-center overflow-hidden">
                     {item.mediaType === "VIDEO"
-                      ? <video src={item.mediaUrl} className="w-full h-full object-cover" />
-                      : <img src={item.mediaUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="Post" />
+                      ? <video src={item.mediaUrl} className="w-full h-full object-cover" muted playsInline />
+                      : <img src={item.mediaUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt="Post" />
                     }
+                    {/* Media Type Badge - Floating on media for premium look */}
+                    <div className="absolute top-4 right-4 px-3 py-1 bg-black/40 backdrop-blur-md border border-white/20 rounded-full">
+                       <span className="text-[9px] font-black text-white uppercase tracking-widest">{item.mediaType}</span>
+                    </div>
                   </div>
-                  <div className="p-5 space-y-3">
+
+                  {/* Info Section - Guaranteed to be below the media */}
+                  <div className="p-6 flex flex-col flex-1 gap-4">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{item.mediaType}</span>
-                      <div className="flex items-center gap-1.5 text-[13px] font-black text-slate-700">
-                        <Activity size={12} className="text-rose-500" />
+                      <div className="flex items-center gap-2 text-[14px] font-black text-slate-900">
+                        <Activity size={14} className="text-rose-500" />
                         {formatShortNumber(item.likeCount)}
                       </div>
+                      <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">Likes</div>
                     </div>
-                    {item.caption && <p className="text-[12px] text-slate-400 line-clamp-2 leading-snug">{item.caption}</p>}
-                    <a
-                      href={item.permalink}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block w-full text-center py-2.5 bg-slate-50 hover:bg-slate-900 hover:text-white text-[11px] font-black text-slate-600 rounded-xl transition-all uppercase tracking-widest"
-                    >
-                      View on Instagram
-                    </a>
+                    
+                    {item.caption && (
+                      <p className="text-[12px] text-slate-500 line-clamp-3 leading-relaxed min-h-[48px]">
+                        {item.caption}
+                      </p>
+                    )}
+
+                    <div className="mt-auto pt-2">
+                      <a
+                        href={item.permalink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center justify-center w-full py-3 bg-slate-950 text-white text-[11px] font-black rounded-2xl hover:bg-cyan-600 transition-colors uppercase tracking-[0.2em]"
+                      >
+                        Open Post
+                      </a>
+                    </div>
                   </div>
                 </div>
               ))}

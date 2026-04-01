@@ -109,6 +109,16 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
       ]);
       setPendingPosts(pending);
       setHistory(hist);
+      
+      // Update activity feed from history log
+      const logs = hist.slice(0, 15).map(h => ({
+        id: h._id,
+        title: h.status === 'posted' ? 'Successfully Posted' : h.status === 'failed' ? 'Post Failed' : 'Ready to Post',
+        description: h.status === 'failed' ? 'Check your Instagram connection.' : `${h.postType} ready for publish.`,
+        tone: h.status === 'posted' ? 'success' : h.status === 'failed' ? 'error' : 'info',
+        createdAt: h.updatedAt
+      }));
+      setActivityFeed(logs);
     } catch {}
   };
 
@@ -253,6 +263,16 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
     await handleUpdateAutoAnime({ timeSlots: current.filter(s => s !== slotToRemove) });
   };
 
+  const handleDeletePost = async (id) => {
+    try {
+      await api.delete(`/posts/${id}`);
+      addToast("info", "Post Deleted", "The item has been removed from your queue.", 4000);
+      loadPosts();
+    } catch {
+      addToast("error", "Delete Failed", "Could not remove post. Please try again.", 5000);
+    }
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -280,7 +300,7 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
             )}
 
             {activeTab === "pending" && (
-              <QueuedPostsPage key="pending" pendingPosts={pendingPosts} />
+              <QueuedPostsPage key="pending" pendingPosts={pendingPosts} onDelete={handleDeletePost} />
             )}
 
             {activeTab === "liveMonitor" && (
