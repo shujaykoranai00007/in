@@ -236,9 +236,12 @@ async function extractSeparateMediaUrlsWithYtDlp(sourceUrl) {
     "-m", "yt_dlp", 
     "-j", 
     "--no-playlist",
-    "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "--add-header", "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-    "--add-header", "Accept-Language:en-US,en;q=0.9"
+    "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+    "--add-header", "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,image/svg+xml,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+    "--add-header", "Accept-Language:en-US,en;q=0.9",
+    "--add-header", "Sec-Ch-Ua:\"Google Chrome\";v=\"123\", \"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"123\"",
+    "--add-header", "Sec-Ch-Ua-Mobile:?0",
+    "--add-header", "Sec-Ch-Ua-Platform:\"Windows\""
   ];
   try {
     const { stdout } = await execFileAsync("python", BASE_ARGS.concat(sourceUrl), { timeout: 45000 });
@@ -414,31 +417,49 @@ export async function runAutoAnimeNow(options = {}) {
       count++;
       const key = `${candidate.sourceId}:${candidate.postType || "reel"}`;
       
-      if (recentSourceIds.has(key)) continue;
-      if (await Post.exists({ sourceId: candidate.sourceId })) continue;
+      if (recentSourceIds.has(key)) {
+        console.log(`[AUTO ANIME] ⏩ Skipping "${candidate.title.substring(0, 25)}..." - Already posted recently.`);
+        continue;
+      }
+      if (await Post.exists({ sourceId: candidate.sourceId })) {
+        console.log(`[AUTO ANIME] ⏩ Skipping "${candidate.title.substring(0, 25)}..." - Already exists in database.`);
+        continue;
+      }
 
       // Real-time status for Dashboard
-      config.lastRunMessage = `Trying candidate ${count}/${testBatch.length}: ${candidate.title.substring(0, 25)}...`;
+      config.lastRunMessage = `Preparing candidate ${count}/${testBatch.length}: ${candidate.title.substring(0, 25)}...`;
       await config.save();
 
-      bestCandidate = candidate;
-      const localMediaUrl = await (candidate.postType === "post" ? cacheAutoImageCandidate(candidate) : prepareReelWithAudio(candidate));
-      
-      if (localMediaUrl) {
-        console.log(`[AUTO ANIME] 📤 Mirroring prepared ${candidate.postType} to public storage...`);
-        const token = String(candidate.sourceId || Date.now()).replace(/[^a-zA-Z0-9_-]/g, "");
-        preparedMediaUrl = await mirrorMediaToPublicUrl(localMediaUrl, token).catch((err) => {
-          console.warn(`[AUTO ANIME] Mirror failed, using local URL: ${err.message}`);
-          return localMediaUrl;
-        });
-        if (global.gc) global.gc();
-        break;
+      try {
+        bestCandidate = candidate;
+        const localMediaUrl = await (candidate.postType === "post" ? cacheAutoImageCandidate(candidate) : prepareReelWithAudio(candidate));
+        
+        if (localMediaUrl) {
+          console.log(`[AUTO ANIME] 📤 Mirroring prepared ${candidate.postType} to public storage...`);
+          const token = String(candidate.sourceId || Date.now()).replace(/[^a-zA-Z0-9_-]/g, "");
+          preparedMediaUrl = await mirrorMediaToPublicUrl(localMediaUrl, token).catch((err) => {
+            console.warn(`[AUTO ANIME] Mirror failed, using local URL: ${err.message}`);
+            return localMediaUrl;
+          });
+          if (global.gc) global.gc();
+          break;
+        } else {
+          // If localMediaUrl is null, it means preparation skipped it (e.g. no audio)
+          config.lastRunMessage = `Skipped: ${candidate.title.substring(0, 20)}... (No audio or download failed). Trying next...`;
+          await config.save();
+          await new Promise(r => setTimeout(r, 1500)); // Let user read the skip reason
+        }
+      } catch (err) {
+        console.error(`[AUTO ANIME] ❌ Preparation error for "${candidate.title}":`, err.message);
+        config.lastRunMessage = `Error preparing "${candidate.title.substring(0, 15)}...": ${err.message}. Trying next...`;
+        await config.save();
+        await new Promise(r => setTimeout(r, 1500));
       }
     }
 
     if (!preparedMediaUrl) {
       config.lastRunStatus = "failed";
-      config.lastRunMessage = "Failed to prepare any found media.";
+      config.lastRunMessage = `None of the ${testBatch.length} candidates were eligible (checked score, width, age, and audio).`;
       await config.save();
       return { queued: false, message: config.lastRunMessage };
     }

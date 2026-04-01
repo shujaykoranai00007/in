@@ -167,6 +167,778 @@ function getProcessLabel(post) {
   return "Queued For Processing";
 }
 
+// --- SUB-COMPONENTS (MEMOIZED FOR PERFORMANCE) ---
+
+const LiveMonitorSection = React.memo(({ 
+  requestDesktopNotifications, 
+  desktopNotificationPermission, 
+  activityFeedPreview, 
+  activityFeed, 
+  queueSnapshot, 
+  history, 
+  monitorPipeline, 
+  autoAnimeActivating, 
+  autoAnimeRunning, 
+  autoAnimeConfig, 
+  liveProgressPosts,
+  getProgressForPost,
+  getPostLabel,
+  getProcessLabel,
+  formatDate
+}) => {
+  return (
+    <>
+      <section className="glass-panel screen-frame rounded-2xl px-4 py-4 md:px-5 md:py-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="muted-text text-xs uppercase tracking-[0.18em]">Live Queue Monitor</p>
+            <h3 className="text-lg font-bold font-display">Real-time upload status alerts</h3>
+            <p className="muted-text mt-1 text-xs">Dedicated monitor screen for queue, upload, retry, success, and failure events.</p>
+          </div>
+          <button
+            type="button"
+            onClick={requestDesktopNotifications}
+            disabled={desktopNotificationPermission === "granted" || desktopNotificationPermission === "unsupported"}
+            className="ghost-btn px-3 py-2 text-xs disabled:opacity-60"
+          >
+            {desktopNotificationPermission === "granted"
+              ? "Desktop Alerts On"
+              : desktopNotificationPermission === "unsupported"
+                ? "Desktop Alerts Unsupported"
+                : "Enable Desktop Alerts"}
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-2">
+          {activityFeedPreview.map((event) => (
+            <div
+              key={event.id}
+              className={`rounded-xl border px-3 py-2 text-sm ${
+                event.tone === "success"
+                  ? "border-emerald-300/80 bg-emerald-100/80 text-emerald-900"
+                  : event.tone === "danger"
+                    ? "border-red-300/80 bg-red-100/80 text-red-900"
+                    : event.tone === "warn"
+                      ? "border-amber-300/80 bg-amber-100/80 text-amber-900"
+                      : "border-cyan-300/80 bg-cyan-100/80 text-cyan-900"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold">{event.title}</p>
+                  {event.description && <p className="mt-0.5 text-xs opacity-90">{event.description}</p>}
+                </div>
+                <p className="text-[11px] font-semibold opacity-70">{formatDate(event.createdAt)}</p>
+              </div>
+            </div>
+          ))}
+          {!activityFeed.length && (
+            <p className="text-xs text-muted">No queue events yet. Schedule or auto-queue a reel/post to see live updates.</p>
+          )}
+        </div>
+      </section>
+
+      <section className="glass-panel screen-frame relative overflow-hidden rounded-3xl p-6 md:p-8">
+        <div className="flex flex-col items-center justify-center gap-8 md:flex-row md:items-start md:justify-between">
+          <div className="flex flex-col items-center gap-4 text-center md:items-start md:text-left">
+            <div className="flex items-center gap-2 rounded-full bg-blue-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-blue-500">
+              <Zap size={10} />
+              System Active
+            </div>
+            <h3 className="text-3xl font-bold font-display tracking-tight">Live Pipeline</h3>
+            <p className="muted-text max-w-xs text-sm">Real-time visualization of your automation engine processing content.</p>
+            
+            <div className="mt-4 flex gap-4">
+              <div className="flex flex-col">
+                <span className="text-xs font-bold uppercase tracking-tighter opacity-40">Queue</span>
+                <span className="text-xl font-bold">{queueSnapshot.pendingCount + queueSnapshot.processingCount}</span>
+              </div>
+              <div className="h-10 w-px bg-slate-200/50" />
+              <div className="flex flex-col">
+                <span className="text-xs font-bold uppercase tracking-tighter opacity-40">Completed</span>
+                <span className="text-xl font-bold">{queueSnapshot.failedCount + (history.filter(p => p.status === 'posted').length)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="relative">
+            <CircularProgress 
+              size={200} 
+              strokeWidth={12} 
+              percent={monitorPipeline.find(s => s.key === 'complete')?.percent || 0}
+              label="Overall"
+            />
+            <motion.div 
+              animate={{ opacity: [0.4, 0.7, 0.4] }} 
+              transition={{ duration: 2, repeat: Infinity }}
+              className="absolute -inset-4 -z-10 rounded-full bg-blue-500/5 blur-2xl" 
+            />
+          </div>
+        </div>
+
+        <div className="mt-10 grid gap-6 lg:grid-cols-2">
+          <div className="space-y-4">
+            <h4 className="flex items-center gap-2 text-sm font-bold">
+              <Terminal size={16} className="text-blue-500" />
+              Real-time Status Monitor
+            </h4>
+            <div className="status-terminal min-h-[160px] shadow-inner">
+              <AnimatePresence mode="popLayout">
+                {activityFeedPreview.length > 0 ? (
+                  activityFeedPreview.map((event, i) => (
+                    <motion.div
+                      key={event.id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0 }}
+                      className={`status-line ${event.tone === 'warn' ? 'searching' : event.tone === 'danger' ? 'error' : ''}`}
+                      style={{ opacity: 1 - i * 0.12 }}
+                    >
+                      <span className="timestamp">[{new Date(event.createdAt).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span> 
+                      {event.title}
+                      {event.description && <span className="ml-2 opacity-50 text-[10px] italic">({event.description})</span>}
+                    </motion.div>
+                  ))
+                ) : (
+                  <div className="status-line opacity-40 italic">Waiting for pipeline activity...</div>
+                )}
+              </AnimatePresence>
+              {(autoAnimeActivating || autoAnimeRunning) && (
+                <motion.div 
+                  animate={{ opacity: [0.7, 1, 0.7] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                  className={`status-line mt-2 font-bold ${String(autoAnimeConfig?.lastRunMessage).toLowerCase().includes('searching') ? 'searching' : 'text-cyan-400'}`}
+                >
+                  <span className="timestamp">[{new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
+                  {autoAnimeConfig?.lastRunMessage || "Initializing background pipeline..."}
+                </motion.div>
+              )}
+              {autoAnimeConfig?.lastRunStatus === "failed" && !autoAnimeRunning && (
+                <div className="status-line mt-2 font-bold error">
+                  <span className="timestamp">[{new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
+                  Error: {autoAnimeConfig?.lastRunMessage}
+                </div>
+              )}
+              {!autoAnimeActivating && !autoAnimeRunning && activityFeedPreview.length === 0 && (
+                <div className="status-line opacity-40 italic">System Idle. Waiting for trigger...</div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h4 className="flex items-center gap-2 text-sm font-bold">
+              <Layers size={16} className="text-emerald-500" />
+              Stage Breakdown
+            </h4>
+            <div className="grid gap-3">
+              {monitorPipeline.map((stage) => (
+                <div key={stage.key} className="group rounded-2xl border border-slate-200/50 bg-white/40 p-3 transition-colors hover:border-blue-500/30">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-3">
+                      <div className={`h-2 w-2 rounded-full ${stage.percent === 100 ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : stage.percent > 0 ? 'bg-blue-500 animate-pulse' : 'bg-slate-300'}`} />
+                      <span className="font-bold">{stage.label}</span>
+                    </div>
+                    <span className="font-bold opacity-60">{stage.percent}%</span>
+                  </div>
+                  <div className="mt-2 text-[10px] text-muted">{stage.detail}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="mt-4 rounded-xl border border-slate-200/70 bg-white/70 p-3">
+        <h4 className="text-sm font-semibold">Live Progress By Post</h4>
+        <div className="mt-3 grid gap-3">
+          {liveProgressPosts.map((post) => {
+            const percent = getProgressForPost(post);
+            const postLabel = getPostLabel(post);
+            const processLabel = getProcessLabel(post);
+
+            return (
+              <div key={post._id} className="rounded-lg border border-slate-200/70 bg-white/85 px-3 py-2">
+                <div className="flex items-center justify-between gap-3 text-xs">
+                  <p className="font-semibold">
+                    {postLabel} • {post._id?.slice(-6) || "N/A"}
+                  </p>
+                  <p className="font-semibold">{percent}%</p>
+                </div>
+                <div className="mt-2 h-2.5 rounded-full bg-slate-200/80">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-sky-500 to-blue-600 transition-all duration-500"
+                    style={{ width: `${percent}%` }}
+                  />
+                </div>
+                <p className="muted-text mt-1 text-[11px]">{processLabel}</p>
+              </div>
+            );
+          })}
+          {!liveProgressPosts.length && (
+            <p className="muted-text text-xs">No active posts yet. Queue a reel/post to see progress bars.</p>
+          )}
+        </div>
+      </div>
+    </>
+  );
+});
+
+const AnimeAutoSection = React.memo(({
+  autoAnimeLoading,
+  autoAnimeConfig,
+  autoAnimeRunning,
+  autoAnimeActivating,
+  autoAnimeSaving,
+  autoAnimeMessage,
+  newTimeSlot,
+  setNewTimeSlot,
+  runAutoAnimeNow,
+  toggleDailyAutoSchedule,
+  updateAutoAnimeField,
+  addTimeSlot,
+  removeTimeSlot,
+  saveAutoAnimeConfig
+}) => {
+  return (
+    <section className="glass-panel screen-frame animate-floatIn rounded-2xl p-5 md:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-xl font-bold font-display">Anime Auto Mode</h3>
+          <p className="mt-1 text-sm text-muted">
+            Pull high-quality anime reels or image posts from Reddit and auto-schedule at your fixed daily times.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={runAutoAnimeNow}
+            disabled={autoAnimeRunning || autoAnimeLoading || autoAnimeActivating}
+            className="ghost-btn px-3 py-2 text-xs disabled:opacity-60"
+          >
+            {autoAnimeRunning ? "Running..." : "Run Now (Instant)"}
+          </button>
+          <button
+            type="button"
+            onClick={toggleDailyAutoSchedule}
+            disabled={autoAnimeActivating || autoAnimeLoading || autoAnimeRunning || !autoAnimeConfig}
+            className={`pro-btn px-3 py-2 text-xs disabled:opacity-60 transition-colors ${autoAnimeConfig?.enabled ? "bg-red-500/90 hover:bg-red-500 border-red-500 text-white shadow-[#ef44443a]" : ""}`}
+          >
+            {autoAnimeActivating ? "Processing..." : autoAnimeConfig?.enabled ? "Stop Daily Auto" : "Start Daily Auto"}
+          </button>
+        </div>
+      </div>
+
+      {autoAnimeLoading && (
+        <p className="mt-4 text-sm text-muted">Loading anime automation config...</p>
+      )}
+
+      {autoAnimeConfig && (
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <label className="text-sm text-muted">
+            Timezone
+            <input
+              type="text"
+              value={autoAnimeConfig.timezone || "Asia/Kolkata"}
+              onChange={(e) => updateAutoAnimeField("timezone", e.target.value)}
+              className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
+              placeholder="Asia/Kolkata"
+            />
+          </label>
+
+          <label className="text-sm text-muted">
+            Auto content type
+            <select
+              value={autoAnimeConfig.contentType || "reel"}
+              onChange={(e) => updateAutoAnimeField("contentType", e.target.value)}
+              className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
+            >
+              <option value="reel">Reels only</option>
+              <option value="post">Image posts only</option>
+              <option value="both">Both reels + image posts</option>
+            </select>
+          </label>
+
+          <label className="text-sm text-muted">
+            <span className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={autoAnimeConfig.randomMode !== false}
+                onChange={(e) => updateAutoAnimeField("randomMode", e.target.checked)}
+              />
+              Random anime mode (no strict match filters)
+            </span>
+          </label>
+
+          <label className="text-sm text-muted md:col-span-2">
+            Subreddits (comma-separated)
+            <input
+              type="text"
+              value={(autoAnimeConfig.subreddits || []).join(", ")}
+              onChange={(e) =>
+                updateAutoAnimeField(
+                  "subreddits",
+                  e.target.value
+                    .split(",")
+                    .map((item) => item.trim())
+                    .filter(Boolean)
+                )
+              }
+              className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
+              placeholder="Animeedits, AnimeMusicVideos, anime_edits, anime"
+            />
+          </label>
+
+          <label className="text-sm text-muted md:col-span-2">
+            Source keyword filter (optional, comma-separated)
+            <input
+              type="text"
+              value={(autoAnimeConfig.keywords || []).join(", ")}
+              onChange={(e) =>
+                updateAutoAnimeField(
+                  "keywords",
+                  e.target.value
+                    .split(",")
+                    .map((item) => item.trim())
+                    .filter(Boolean)
+                )
+              }
+              className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
+              placeholder="leave empty for broad match"
+            />
+          </label>
+
+          <label className="text-sm text-muted">
+            Minimum Reddit score
+            <input
+              type="number"
+              min={0}
+              value={autoAnimeConfig.minScore ?? 20}
+              onChange={(e) => updateAutoAnimeField("minScore", Number(e.target.value))}
+              className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
+            />
+          </label>
+
+          <label className="text-sm text-muted">
+            Minimum width (px)
+            <input
+              type="number"
+              min={240}
+              value={autoAnimeConfig.minWidth ?? 720}
+              onChange={(e) => updateAutoAnimeField("minWidth", Number(e.target.value))}
+              className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
+            />
+          </label>
+
+          <label className="text-sm text-muted">
+            Max age (hours)
+            <input
+              type="number"
+              min={1}
+              max={720}
+              value={autoAnimeConfig.maxAgeHours ?? 72}
+              onChange={(e) => updateAutoAnimeField("maxAgeHours", Number(e.target.value))}
+              className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
+            />
+          </label>
+
+          <div className="md:col-span-2">
+            <p className="text-sm text-muted">Manual fixed time slots (HH:mm)</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <input
+                type="time"
+                value={newTimeSlot}
+                onChange={(e) => setNewTimeSlot(e.target.value)}
+                className="field-base px-3 py-2 text-sm text-slate-800"
+              />
+              <button
+                type="button"
+                onClick={addTimeSlot}
+                className="ghost-btn inline-flex items-center gap-1 px-3 py-2 text-xs"
+              >
+                <Plus size={13} />
+                Add Time
+              </button>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(autoAnimeConfig.timeSlots || []).map((slot) => (
+                <span key={slot} className="status-pill inline-flex items-center gap-1 bg-cyan-100 text-cyan-900">
+                  {slot}
+                  <button type="button" onClick={() => removeTimeSlot(slot)} className="opacity-80 hover:opacity-100">
+                    <Trash2 size={12} />
+                  </button>
+                </span>
+              ))}
+              {!autoAnimeConfig.timeSlots?.length && (
+                <p className="text-xs text-amber-300">Add at least one time slot for automatic runs.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="md:col-span-2 rounded-xl border border-slate-200 bg-white/70 p-3">
+            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Caption Engine</p>
+            <p className="mt-1 text-xs text-slate-600">
+              Caption combines template + rotating hashtags + rotating keywords + dynamic keywords from reel title.
+            </p>
+          </div>
+
+          <label className="text-sm text-muted md:col-span-2">
+            Caption template
+            <textarea
+              rows={4}
+              value={autoAnimeConfig.captionTemplate || ""}
+              onChange={(e) => updateAutoAnimeField("captionTemplate", e.target.value)}
+              className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
+              placeholder="{{anime}} edit drop\n{{title}}\n\n#anime #edit #reels"
+            />
+            <p className="mt-1 text-xs text-muted">Variables: {"{{anime}}"}, {"{{title}}"}, {"{{subreddit}}"}, {"{{sourceUrl}}"}</p>
+          </label>
+
+          <label className="text-sm text-muted md:col-span-2">
+            Hashtag sets rotation (one set per line)
+            <textarea
+              rows={4}
+              value={(autoAnimeConfig.hashtagSets || []).join("\n")}
+              onChange={(e) => updateAutoAnimeField("hashtagSets", e.target.value.split("\n"))}
+              className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
+              placeholder="#AnimeEdit #AnimeReels #AMV"
+            />
+            <p className="mt-1 text-xs text-muted">Set 1 is used first, then it rotates to the next set automatically on each queued post.</p>
+          </label>
+
+          <label className="text-sm text-muted md:col-span-2">
+            Keyword sets rotation (one set per line)
+            <textarea
+              rows={4}
+              value={(autoAnimeConfig.keywordSets || []).join("\n")}
+              onChange={(e) => updateAutoAnimeField("keywordSets", e.target.value.split("\n"))}
+              className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
+              placeholder="anime edit, trending anime, amv style"
+            />
+            <p className="mt-1 text-xs text-muted">One keyword set is added into caption each run and rotates automatically, just like hashtag sets.</p>
+          </label>
+
+          <div className="md:col-span-2 rounded-xl border border-cyan-200/60 bg-cyan-50/50 p-3">
+            <p className="text-sm font-semibold text-cyan-800">Troubleshooting no-match issue</p>
+            <ul className="mt-1 list-disc pl-5 text-xs text-cyan-700">
+              <li>Set content type to both for higher success rate.</li>
+              <li>Lower min score to 5-10 and min width to 480 if source is sparse.</li>
+              <li>Keep active subreddits like Animeedits and AnimeMusicVideos.</li>
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {autoAnimeMessage && <p className="mt-4 text-sm text-accent">{autoAnimeMessage}</p>}
+
+      <button
+        type="button"
+        onClick={saveAutoAnimeConfig}
+        disabled={autoAnimeSaving || autoAnimeLoading || !autoAnimeConfig}
+        className="pro-btn mt-6 px-5 py-3 text-sm disabled:opacity-70"
+      >
+        {autoAnimeSaving ? "Saving..." : "Save Automation Settings"}
+      </button>
+    </section>
+  );
+});
+
+const PendingQueueSection = React.memo(({
+  pendingPosts,
+  handleDeleteLocalMedia,
+  handleCancelPost,
+  hasDeletableLocalMedia,
+  mediaDeleteInProgress,
+  postCancelInProgress,
+  formatDate
+}) => {
+  return (
+    <section className="glass-panel screen-frame animate-floatIn rounded-2xl p-5">
+      <h3 className="text-xl font-bold font-display">Scheduled Queue</h3>
+
+      <div className="mt-4 space-y-3 md:hidden">
+        {pendingPosts.map((post) => (
+          <article key={post._id} className="rounded-xl border border-slate-200 bg-white/85 p-3 shadow-sm">
+            <div className="flex items-start justify-between gap-2">
+              <span className="status-pill inline-flex items-center gap-1 bg-slate-100 text-slate-700">
+                {post.postType === "reel" ? <Film size={13} /> : <Image size={13} />}
+                {post.postType}
+              </span>
+              <span
+                className={`status-pill ${
+                  post.status === "processing"
+                    ? "bg-cyan-100 text-cyan-900"
+                    : "bg-amber-100 text-amber-900"
+                }`}
+              >
+                {post.status}
+              </span>
+            </div>
+
+            <p className="mt-2 line-clamp-2 text-sm text-slate-700">{post.caption || "No caption"}</p>
+
+            <div className="mt-3 rounded-lg bg-slate-100/80 px-2.5 py-2 text-xs">
+              <p className="muted-text">Scheduled</p>
+              <p className="mt-0.5 font-semibold text-slate-700">{formatDate(post.scheduledTime)}</p>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => handleDeleteLocalMedia(post)}
+                disabled={!hasDeletableLocalMedia(post) || Boolean(mediaDeleteInProgress[post._id])}
+                className="ghost-btn inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs disabled:opacity-50"
+              >
+                <Trash2 size={12} />
+                {mediaDeleteInProgress[post._id] ? "Deleting..." : "Delete Local Media"}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCancelPost(post)}
+                disabled={Boolean(postCancelInProgress[post._id])}
+                className="pro-btn inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs disabled:opacity-50"
+              >
+                <AlertTriangle size={12} />
+                {postCancelInProgress[post._id] ? "Cancelling..." : "Cancel Post"}
+              </button>
+            </div>
+          </article>
+        ))}
+
+        {!pendingPosts.length && (
+          <p className="rounded-xl border border-slate-200 bg-white/85 px-3 py-5 text-center text-sm text-muted">
+            No pending posts.
+          </p>
+        )}
+      </div>
+
+      <div className="mt-4 hidden overflow-x-auto md:block">
+        <table className="w-full min-w-[680px] text-left text-sm">
+          <thead className="text-muted">
+            <tr className="border-b border-white/10">
+              <th className="py-3">Type</th>
+              <th className="py-3">Caption</th>
+              <th className="py-3">Scheduled</th>
+              <th className="py-3">Status</th>
+              <th className="py-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pendingPosts.map((post) => (
+              <tr key={post._id} className="border-b border-white/5 transition hover:bg-white/[0.03]">
+                <td className="py-3 pr-4">
+                  <span className="status-pill inline-flex items-center gap-1">
+                    {post.postType === "reel" ? <Film size={13} /> : <Image size={13} />}
+                    {post.postType}
+                  </span>
+                </td>
+                <td className="max-w-sm truncate py-3 pr-4">{post.caption || "-"}</td>
+                <td className="py-3 pr-4">{formatDate(post.scheduledTime)}</td>
+                <td className="py-3">
+                  <span
+                    className={`status-pill ${
+                      post.status === "processing"
+                        ? "bg-cyan-100 text-cyan-900"
+                        : "bg-amber-100 text-amber-900"
+                    }`}
+                  >
+                    {post.status}
+                  </span>
+                </td>
+                <td className="py-3">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteLocalMedia(post)}
+                      disabled={!hasDeletableLocalMedia(post) || Boolean(mediaDeleteInProgress[post._id])}
+                      className="ghost-btn inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs disabled:opacity-50"
+                    >
+                      <Trash2 size={12} />
+                      {mediaDeleteInProgress[post._id] ? "Deleting..." : "Delete Media"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCancelPost(post)}
+                      disabled={Boolean(postCancelInProgress[post._id])}
+                      className="pro-btn inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs disabled:opacity-50"
+                    >
+                      <AlertTriangle size={12} />
+                      {postCancelInProgress[post._id] ? "Cancelling..." : "Cancel"}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {!pendingPosts.length && (
+              <tr>
+                <td colSpan={5} className="py-6 text-center text-muted">
+                  No pending posts.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+});
+
+const HistorySection = React.memo(({
+  historyView,
+  history,
+  handleDeleteLocalMedia,
+  handleCancelPost,
+  hasDeletableLocalMedia,
+  mediaDeleteInProgress,
+  postCancelInProgress,
+  formatDate
+}) => {
+  return (
+    <section className="glass-panel screen-frame animate-floatIn rounded-2xl p-5">
+      <h3 className="text-xl font-bold font-display">Posting History</h3>
+
+      <div className="mt-4 space-y-3 md:hidden">
+        {historyView.map((post) => (
+          <article key={post._id} className="rounded-xl border border-slate-200 bg-white/85 p-3 shadow-sm">
+            <div className="flex items-start justify-between gap-2">
+              <span className="status-pill inline-flex items-center gap-1 bg-slate-100 text-slate-700">
+                {post.postType === "reel" ? <Film size={13} /> : <Image size={13} />}
+                {post.postType}
+              </span>
+              <span
+                className={`status-pill ${
+                  post.status === "posted"
+                    ? "bg-emerald-100 text-emerald-900"
+                    : post.status === "failed"
+                      ? "bg-red-100 text-red-900"
+                      : post.status === "processing"
+                        ? "bg-cyan-100 text-cyan-900"
+                        : "bg-amber-100 text-amber-900"
+                }`}
+              >
+                {post.status}
+              </span>
+            </div>
+
+            <div className="mt-3 rounded-lg bg-slate-100/80 px-2.5 py-2 text-xs">
+              <p className="muted-text">Updated</p>
+              <p className="mt-0.5 font-semibold text-slate-700">{formatDate(post.updatedAt)}</p>
+            </div>
+
+            <div className="mt-2 flex items-center gap-3 text-xs text-muted">
+              <span>Attempts: {post.attempts}</span>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => handleDeleteLocalMedia(post)}
+                disabled={!hasDeletableLocalMedia(post) || Boolean(mediaDeleteInProgress[post._id])}
+                className="ghost-btn inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs disabled:opacity-50"
+              >
+                <Trash2 size={12} />
+                {mediaDeleteInProgress[post._id] ? "Deleting..." : "Delete Local Media"}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCancelPost(post)}
+                disabled={Boolean(postCancelInProgress[post._id])}
+                className="pro-btn inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs disabled:opacity-50"
+              >
+                <AlertTriangle size={12} />
+                {postCancelInProgress[post._id] ? "Deleting..." : "Delete Post"}
+              </button>
+            </div>
+
+            {post.errorLog && (
+              <p className="mt-2 line-clamp-2 break-words rounded-lg bg-red-50 px-2.5 py-2 text-xs text-red-700" title={post.errorLog}>
+                {post.summarizedError.length > 120 ? `${post.summarizedError.slice(0, 117)}...` : post.summarizedError}
+              </p>
+            )}
+          </article>
+        ))}
+
+        {!history.length && (
+          <p className="rounded-xl border border-slate-200 bg-white/85 px-3 py-5 text-center text-sm text-muted">
+            No history yet.
+          </p>
+        )}
+      </div>
+
+      <div className="mt-4 hidden overflow-x-auto md:block">
+        <table className="w-full min-w-[680px] text-left text-sm">
+          <thead className="text-muted">
+            <tr className="border-b border-white/10">
+              <th className="py-3">Type</th>
+              <th className="py-3">Time</th>
+              <th className="py-3">Attempts</th>
+              <th className="py-3">Status</th>
+              <th className="py-3">Error</th>
+              <th className="py-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {historyView.map((post) => (
+              <tr key={post._id} className="border-b border-white/5 transition hover:bg-white/[0.03]">
+                <td className="py-3 pr-4">{post.postType}</td>
+                <td className="py-3 pr-4">{formatDate(post.updatedAt)}</td>
+                <td className="py-3 pr-4">{post.attempts}</td>
+                <td className="py-3 pr-4">
+                  <span
+                    className={`status-pill ${
+                      post.status === "posted"
+                        ? "bg-emerald-100 text-emerald-900"
+                        : post.status === "failed"
+                          ? "bg-red-100 text-red-900"
+                          : post.status === "processing"
+                            ? "bg-cyan-100 text-cyan-900"
+                            : "bg-amber-100 text-amber-900"
+                    }`}
+                  >
+                    {post.status}
+                  </span>
+                </td>
+                <td className="max-w-xs truncate py-3 text-muted" title={post.errorLog || ""}>
+                  {post.summarizedError}
+                </td>
+                <td className="py-3">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteLocalMedia(post)}
+                      disabled={!hasDeletableLocalMedia(post) || Boolean(mediaDeleteInProgress[post._id])}
+                      className="ghost-btn inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs disabled:opacity-50"
+                    >
+                      <Trash2 size={12} />
+                      {mediaDeleteInProgress[post._id] ? "Deleting..." : "Delete Media"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCancelPost(post)}
+                      disabled={Boolean(postCancelInProgress[post._id])}
+                      className="pro-btn inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs disabled:opacity-50"
+                    >
+                      <AlertTriangle size={12} />
+                      {postCancelInProgress[post._id] ? "Deleting..." : "Delete"}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {!history.length && (
+              <tr>
+                <td colSpan={6} className="py-6 text-center text-muted">
+                  No posting history available.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+});
+
 export default function DashboardView({ user, onLogout, instagramStatus }) {
   const POLL_INTERVAL_MS = 10000;
   const TOAST_TTL_MS = 12000;
@@ -737,23 +1509,36 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
   }, [history, pendingPosts]);
 
   useEffect(() => {
+    // Unified Smart Heartbeat (8s)
+    // Faster heartbeat (8s) for better responsiveness while maintaining efficiency.
+    const HEARTBEAT_INTERVAL_MS = 8000;
+    
     const interval = setInterval(() => {
       const isVisible = typeof document === "undefined" || document.visibilityState === "visible";
+      if (!isVisible) return;
 
+      // 1. Always poll posts (Queue/History)
       loadPosts({ silent: true });
+      
+      // 2. Always run tick for background processing status
       runRuntimeTick();
 
-      if (isVisible && activeTab === "animeAutomation") {
+      // 3. Conditional: load auto-config if tab is active OR if automation is currently running
+      const isAutomationActive = activeTab === "animeAutomation" || activeTab === "live";
+      const isAutomationInProcess = autoAnimeRunning || autoAnimeActivating;
+      
+      if (isAutomationActive || isAutomationInProcess) {
         loadAutoAnimeConfig({ silent: true });
       }
 
-      if (isVisible && activeTab === "insights" && instagramStatus?.valid) {
+      // 4. Conditional: load Instagram analytics only when on Insights tab
+      if (activeTab === "insights" && instagramStatus?.valid) {
         loadInstagramDetails({ silent: true });
       }
-    }, POLL_INTERVAL_MS);
+    }, HEARTBEAT_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [activeTab, instagramStatus?.valid]);
+  }, [activeTab, instagramStatus?.valid, autoAnimeRunning, autoAnimeActivating]);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -1103,215 +1888,23 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
 
         <main className="screen-stack space-y-5">
           {activeTab === "liveMonitor" && (
-            <>
-              <section className="glass-panel screen-frame rounded-2xl px-4 py-4 md:px-5 md:py-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="muted-text text-xs uppercase tracking-[0.18em]">Live Queue Monitor</p>
-                    <h3 className="text-lg font-bold font-display">Real-time upload status alerts</h3>
-                    <p className="muted-text mt-1 text-xs">Dedicated monitor screen for queue, upload, retry, success, and failure events.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={requestDesktopNotifications}
-                    disabled={desktopNotificationPermission === "granted" || desktopNotificationPermission === "unsupported"}
-                    className="ghost-btn px-3 py-2 text-xs disabled:opacity-60"
-                  >
-                    {desktopNotificationPermission === "granted"
-                      ? "Desktop Alerts On"
-                      : desktopNotificationPermission === "unsupported"
-                        ? "Desktop Alerts Unsupported"
-                        : "Enable Desktop Alerts"}
-                  </button>
-                </div>
-
-                <div className="mt-4 grid gap-2">
-                  {activityFeedPreview.map((event) => (
-                    <div
-                      key={event.id}
-                      className={`rounded-xl border px-3 py-2 text-sm ${
-                        event.tone === "success"
-                          ? "border-emerald-300/80 bg-emerald-100/80 text-emerald-900"
-                          : event.tone === "danger"
-                            ? "border-red-300/80 bg-red-100/80 text-red-900"
-                            : event.tone === "warn"
-                              ? "border-amber-300/80 bg-amber-100/80 text-amber-900"
-                              : "border-cyan-300/80 bg-cyan-100/80 text-cyan-900"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-semibold">{event.title}</p>
-                          {event.description && <p className="mt-0.5 text-xs opacity-90">{event.description}</p>}
-                        </div>
-                        <p className="text-[11px] font-semibold opacity-70">{formatDate(event.createdAt)}</p>
-                      </div>
-                    </div>
-                  ))}
-                  {!activityFeed.length && (
-                    <p className="text-xs text-muted">No queue events yet. Schedule or auto-queue a reel/post to see live updates.</p>
-                  )}
-                </div>
-              </section>
-
-              <section className="glass-panel screen-frame rounded-2xl p-4 md:p-5">
-              <section className="glass-panel screen-frame relative overflow-hidden rounded-3xl p-6 md:p-8">
-                <div className="flex flex-col items-center justify-center gap-8 md:flex-row md:items-start md:justify-between">
-                  <div className="flex flex-col items-center gap-4 text-center md:items-start md:text-left">
-                    <div className="flex items-center gap-2 rounded-full bg-blue-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-blue-500">
-                      <Zap size={10} />
-                      System Active
-                    </div>
-                    <h3 className="text-3xl font-bold font-display tracking-tight">Live Pipeline</h3>
-                    <p className="muted-text max-w-xs text-sm">Real-time visualization of your automation engine processing content.</p>
-                    
-                    <div className="mt-4 flex gap-4">
-                      <div className="flex flex-col">
-                        <span className="text-xs font-bold uppercase tracking-tighter opacity-40">Queue</span>
-                        <span className="text-xl font-bold">{queueSnapshot.pendingCount + queueSnapshot.processingCount}</span>
-                      </div>
-                      <div className="h-10 w-px bg-slate-200/50" />
-                      <div className="flex flex-col">
-                        <span className="text-xs font-bold uppercase tracking-tighter opacity-40">Completed</span>
-                        <span className="text-xl font-bold">{queueSnapshot.failedCount + (history.filter(p => p.status === 'posted').length)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="relative">
-                    <CircularProgress 
-                      size={200} 
-                      strokeWidth={12} 
-                      percent={monitorPipeline.find(s => s.key === 'complete')?.percent || 0}
-                      label="Overall"
-                    />
-                    <motion.div 
-                      animate={{ opacity: [0.4, 0.7, 0.4] }} 
-                      transition={{ duration: 2, repeat: Infinity }}
-                      className="absolute -inset-4 -z-10 rounded-full bg-blue-500/5 blur-2xl" 
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-10 grid gap-6 lg:grid-cols-2">
-                  <div className="space-y-4">
-                    <h4 className="flex items-center gap-2 text-sm font-bold">
-                      <Terminal size={16} className="text-blue-500" />
-                      Real-time Status Monitor
-                    </h4>
-                    <div className="status-terminal min-h-[160px] shadow-inner">
-                      <AnimatePresence mode="popLayout">
-                        {activityFeedPreview.length > 0 ? (
-                          activityFeedPreview.map((event, i) => (
-                            <motion.div
-                              key={event.id}
-                              initial={{ opacity: 0, x: -10 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              exit={{ opacity: 0 }}
-                              className="status-line"
-                              style={{ opacity: 1 - i * 0.12 }}
-                            >
-                              <span className="font-bold text-white/40">[{new Date(event.createdAt).toLocaleTimeString([], { hour12: false })}]</span> {event.title}
-                              {event.description && <span className="ml-2 opacity-50 text-[10px] italic">({event.description})</span>}
-                            </motion.div>
-                          ))
-                        ) : (
-                          <div className="status-line opacity-40 italic">Waiting for pipeline activity...</div>
-                        )}
-                      </AnimatePresence>
-                      {(autoAnimeActivating || autoAnimeRunning) && (
-                        <motion.div 
-                          animate={{ opacity: [0.6, 1, 0.6] }}
-                          transition={{ duration: 1.5, repeat: Infinity }}
-                          className="status-line mt-2 font-bold text-cyan-400"
-                        >
-                          {autoAnimeConfig?.lastRunMessage || "Initializing background pipeline..."}
-                        </motion.div>
-                      )}
-                      {autoAnimeConfig?.lastRunStatus === "failed" && !autoAnimeRunning && (
-                        <div className="status-line mt-2 font-bold text-rose-500">
-                          Error: {autoAnimeConfig?.lastRunMessage}
-                        </div>
-                      )}
-                      {!autoAnimeActivating && !autoAnimeRunning && activityFeedPreview.length === 0 && (
-                        <div className="status-line opacity-40 italic">System Idle. Waiting for trigger...</div>
-                      )}
-
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <h4 className="flex items-center gap-2 text-sm font-bold">
-                      <Layers size={16} className="text-emerald-500" />
-                      Stage Breakdown
-                    </h4>
-                    <div className="grid gap-3">
-                      {monitorPipeline.map((stage) => (
-                        <div key={stage.key} className="group rounded-2xl border border-slate-200/50 bg-white/40 p-3 transition-colors hover:border-blue-500/30">
-                          <div className="flex items-center justify-between text-xs">
-                            <div className="flex items-center gap-3">
-                              <div className={`h-2 w-2 rounded-full ${stage.percent === 100 ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : stage.percent > 0 ? 'bg-blue-500 animate-pulse' : 'bg-slate-300'}`} />
-                              <span className="font-bold">{stage.label}</span>
-                            </div>
-                            <span className="font-bold opacity-60">{stage.percent}%</span>
-                          </div>
-                          <div className="mt-2 text-[10px] text-muted">{stage.detail}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-                <div className="mt-4 rounded-xl border border-slate-200/70 bg-white/70 p-3">
-                  <h4 className="text-sm font-semibold">Live Progress By Post</h4>
-                  <div className="mt-3 grid gap-3">
-                    {liveProgressPosts.map((post) => {
-                      const percent = getProgressForPost(post);
-                      const postLabel = getPostLabel(post);
-                      const processLabel = getProcessLabel(post);
-
-                      return (
-                        <div key={post._id} className="rounded-lg border border-slate-200/70 bg-white/85 px-3 py-2">
-                          <div className="flex items-center justify-between gap-3 text-xs">
-                            <p className="font-semibold">
-                              {postLabel} • {post._id?.slice(-6) || "N/A"}
-                            </p>
-                            <p className="font-semibold">{percent}%</p>
-                          </div>
-                          <div className="mt-2 h-2.5 rounded-full bg-slate-200/80">
-                            <div
-                              className="h-full rounded-full bg-gradient-to-r from-sky-500 to-blue-600 transition-all duration-500"
-                              style={{ width: `${percent}%` }}
-                            />
-                          </div>
-                          <p className="muted-text mt-1 text-[11px]">{processLabel}</p>
-                        </div>
-                      );
-                    })}
-                    {!liveProgressPosts.length && (
-                      <p className="muted-text text-xs">No active posts yet. Queue a reel/post to see progress bars.</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-4 rounded-xl border border-slate-200/70 bg-white/70 p-3">
-                  <h4 className="text-sm font-semibold">Current Running Processes</h4>
-                  <ul className="mt-2 space-y-2 text-xs">
-                    {activityFeedPreview.map((event) => (
-                      <li key={`process-${event.id}`} className="rounded-lg border border-slate-200/60 bg-white/85 px-3 py-2">
-                        <p className="font-semibold">{event.title}</p>
-                        {event.description && <p className="muted-text mt-0.5">{event.description}</p>}
-                        <p className="muted-text mt-1 text-[11px]">{formatDate(event.createdAt)}</p>
-                      </li>
-                    ))}
-                    {!activityFeedPreview.length && (
-                      <li className="muted-text">No process steps yet.</li>
-                    )}
-                  </ul>
-                </div>
-              </section>
-            </>
+            <LiveMonitorSection 
+              requestDesktopNotifications={requestDesktopNotifications}
+              desktopNotificationPermission={desktopNotificationPermission}
+              activityFeedPreview={activityFeedPreview}
+              activityFeed={activityFeed}
+              queueSnapshot={queueSnapshot}
+              history={history}
+              monitorPipeline={monitorPipeline}
+              autoAnimeActivating={autoAnimeActivating}
+              autoAnimeRunning={autoAnimeRunning}
+              autoAnimeConfig={autoAnimeConfig}
+              liveProgressPosts={liveProgressPosts}
+              getProgressForPost={getProgressForPost}
+              getPostLabel={getPostLabel}
+              getProcessLabel={getProcessLabel}
+              formatDate={formatDate}
+            />
           )}
 
           {activeTab === "controlCenter" && (
@@ -1773,523 +2366,47 @@ export default function DashboardView({ user, onLogout, instagramStatus }) {
           )}
 
           {activeTab === "animeAutomation" && (
-            <section className="glass-panel screen-frame animate-floatIn rounded-2xl p-5 md:p-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-xl font-bold font-display">Anime Auto Mode</h3>
-                  <p className="mt-1 text-sm text-muted">
-                    Pull high-quality anime reels or image posts from Reddit and auto-schedule at your fixed daily times.
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={runAutoAnimeNow}
-                    disabled={autoAnimeRunning || autoAnimeLoading || autoAnimeActivating}
-                    className="ghost-btn px-3 py-2 text-xs disabled:opacity-60"
-                  >
-                    {autoAnimeRunning ? "Running..." : "Run Now (Instant)"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={toggleDailyAutoSchedule}
-                    disabled={autoAnimeActivating || autoAnimeLoading || autoAnimeRunning || !autoAnimeConfig}
-                    className={`pro-btn px-3 py-2 text-xs disabled:opacity-60 transition-colors ${autoAnimeConfig?.enabled ? "bg-red-500/90 hover:bg-red-500 border-red-500 text-white shadow-[#ef44443a]" : ""}`}
-                  >
-                    {autoAnimeActivating ? "Processing..." : autoAnimeConfig?.enabled ? "Stop Daily Auto" : "Start Daily Auto"}
-                  </button>
-                </div>
-              </div>
-
-              {autoAnimeLoading && (
-                <p className="mt-4 text-sm text-muted">Loading anime automation config...</p>
-              )}
-
-              {autoAnimeConfig && (
-                <div className="mt-5 grid gap-4 md:grid-cols-2">
-
-
-                  <label className="text-sm text-muted">
-                    Timezone
-                    <input
-                      type="text"
-                      value={autoAnimeConfig.timezone || "Asia/Kolkata"}
-                      onChange={(e) => updateAutoAnimeField("timezone", e.target.value)}
-                      className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
-                      placeholder="Asia/Kolkata"
-                    />
-                  </label>
-
-                  <label className="text-sm text-muted">
-                    Auto content type
-                    <select
-                      value={autoAnimeConfig.contentType || "reel"}
-                      onChange={(e) => updateAutoAnimeField("contentType", e.target.value)}
-                      className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
-                    >
-                      <option value="reel">Reels only</option>
-                      <option value="post">Image posts only</option>
-                      <option value="both">Both reels + image posts</option>
-                    </select>
-                  </label>
-
-                  <label className="text-sm text-muted">
-                    <span className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={autoAnimeConfig.randomMode !== false}
-                        onChange={(e) => updateAutoAnimeField("randomMode", e.target.checked)}
-                      />
-                      Random anime mode (no strict match filters)
-                    </span>
-                  </label>
-
-                  <label className="text-sm text-muted md:col-span-2">
-                    Subreddits (comma-separated)
-                    <input
-                      type="text"
-                      value={(autoAnimeConfig.subreddits || []).join(", ")}
-                      onChange={(e) =>
-                        updateAutoAnimeField(
-                          "subreddits",
-                          e.target.value
-                            .split(",")
-                            .map((item) => item.trim())
-                            .filter(Boolean)
-                        )
-                      }
-                      className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
-                      placeholder="Animeedits, AnimeMusicVideos, anime_edits, anime"
-                    />
-                  </label>
-
-                  <label className="text-sm text-muted md:col-span-2">
-                    Source keyword filter (optional, comma-separated)
-                    <input
-                      type="text"
-                      value={(autoAnimeConfig.keywords || []).join(", ")}
-                      onChange={(e) =>
-                        updateAutoAnimeField(
-                          "keywords",
-                          e.target.value
-                            .split(",")
-                            .map((item) => item.trim())
-                            .filter(Boolean)
-                        )
-                      }
-                      className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
-                      placeholder="leave empty for broad match"
-                    />
-                  </label>
-
-                  <label className="text-sm text-muted">
-                    Minimum Reddit score
-                    <input
-                      type="number"
-                      min={0}
-                      value={autoAnimeConfig.minScore ?? 20}
-                      onChange={(e) => updateAutoAnimeField("minScore", Number(e.target.value))}
-                      className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
-                    />
-                  </label>
-
-                  <label className="text-sm text-muted">
-                    Minimum width (px)
-                    <input
-                      type="number"
-                      min={240}
-                      value={autoAnimeConfig.minWidth ?? 720}
-                      onChange={(e) => updateAutoAnimeField("minWidth", Number(e.target.value))}
-                      className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
-                    />
-                  </label>
-
-                  <label className="text-sm text-muted">
-                    Max age (hours)
-                    <input
-                      type="number"
-                      min={1}
-                      max={720}
-                      value={autoAnimeConfig.maxAgeHours ?? 72}
-                      onChange={(e) => updateAutoAnimeField("maxAgeHours", Number(e.target.value))}
-                      className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
-                    />
-                  </label>
-
-                  <div className="md:col-span-2">
-                    <p className="text-sm text-muted">Manual fixed time slots (HH:mm)</p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <input
-                        type="time"
-                        value={newTimeSlot}
-                        onChange={(e) => setNewTimeSlot(e.target.value)}
-                        className="field-base px-3 py-2 text-sm text-slate-800"
-                      />
-                      <button
-                        type="button"
-                        onClick={addTimeSlot}
-                        className="ghost-btn inline-flex items-center gap-1 px-3 py-2 text-xs"
-                      >
-                        <Plus size={13} />
-                        Add Time
-                      </button>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {(autoAnimeConfig.timeSlots || []).map((slot) => (
-                        <span key={slot} className="status-pill inline-flex items-center gap-1 bg-cyan-100 text-cyan-900">
-                          {slot}
-                          <button type="button" onClick={() => removeTimeSlot(slot)} className="opacity-80 hover:opacity-100">
-                            <Trash2 size={12} />
-                          </button>
-                        </span>
-                      ))}
-                      {!autoAnimeConfig.timeSlots?.length && (
-                        <p className="text-xs text-amber-300">Add at least one time slot for automatic runs.</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="md:col-span-2 rounded-xl border border-slate-200 bg-white/70 p-3">
-                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Caption Engine</p>
-                    <p className="mt-1 text-xs text-slate-600">
-                      Caption combines template + rotating hashtags + rotating keywords + dynamic keywords from reel title.
-                    </p>
-                  </div>
-
-                  <label className="text-sm text-muted md:col-span-2">
-                    Caption template
-                    <textarea
-                      rows={4}
-                      value={autoAnimeConfig.captionTemplate || ""}
-                      onChange={(e) => updateAutoAnimeField("captionTemplate", e.target.value)}
-                      className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
-                      placeholder="{{anime}} edit drop\n{{title}}\n\n#anime #edit #reels"
-                    />
-                    <p className="mt-1 text-xs text-muted">Variables: {"{{anime}}"}, {"{{title}}"}, {"{{subreddit}}"}, {"{{sourceUrl}}"}</p>
-                  </label>
-
-                  <label className="text-sm text-muted md:col-span-2">
-                    Hashtag sets rotation (one set per line)
-                    <textarea
-                      rows={4}
-                      value={(autoAnimeConfig.hashtagSets || []).join("\n")}
-                      onChange={(e) => updateAutoAnimeField("hashtagSets", e.target.value.split("\n"))}
-                      className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
-                      placeholder="#AnimeEdit #AnimeReels #AMV"
-                    />
-                    <p className="mt-1 text-xs text-muted">Set 1 is used first, then it rotates to the next set automatically on each queued post.</p>
-                  </label>
-
-                  <label className="text-sm text-muted md:col-span-2">
-                    Keyword sets rotation (one set per line)
-                    <textarea
-                      rows={4}
-                      value={(autoAnimeConfig.keywordSets || []).join("\n")}
-                      onChange={(e) => updateAutoAnimeField("keywordSets", e.target.value.split("\n"))}
-                      className="field-base mt-2 w-full px-3 py-2 text-sm text-slate-800"
-                      placeholder="anime edit, trending anime, amv style"
-                    />
-                    <p className="mt-1 text-xs text-muted">One keyword set is added into caption each run and rotates automatically, just like hashtag sets.</p>
-                  </label>
-
-                  <div className="md:col-span-2 rounded-xl border border-cyan-200/60 bg-cyan-50/50 p-3">
-                    <p className="text-sm font-semibold text-cyan-800">Troubleshooting no-match issue</p>
-                    <ul className="mt-1 list-disc pl-5 text-xs text-cyan-700">
-                      <li>Set content type to both for higher success rate.</li>
-                      <li>Lower min score to 5-10 and min width to 480 if source is sparse.</li>
-                      <li>Keep active subreddits like Animeedits and AnimeMusicVideos.</li>
-                    </ul>
-                  </div>
-                </div>
-              )}
-
-              {autoAnimeMessage && <p className="mt-4 text-sm text-accent">{autoAnimeMessage}</p>}
-
-              <button
-                type="button"
-                onClick={saveAutoAnimeConfig}
-                disabled={autoAnimeSaving || autoAnimeLoading || !autoAnimeConfig}
-                className="pro-btn mt-6 px-5 py-3 text-sm disabled:opacity-70"
-              >
-                {autoAnimeSaving ? "Saving..." : "Save Automation Settings"}
-              </button>
-            </section>
+            <AnimeAutoSection 
+              autoAnimeLoading={autoAnimeLoading}
+              autoAnimeConfig={autoAnimeConfig}
+              autoAnimeRunning={autoAnimeRunning}
+              autoAnimeActivating={autoAnimeActivating}
+              autoAnimeSaving={autoAnimeSaving}
+              autoAnimeMessage={autoAnimeMessage}
+              newTimeSlot={newTimeSlot}
+              setNewTimeSlot={setNewTimeSlot}
+              runAutoAnimeNow={runAutoAnimeNow}
+              toggleDailyAutoSchedule={toggleDailyAutoSchedule}
+              updateAutoAnimeField={updateAutoAnimeField}
+              addTimeSlot={addTimeSlot}
+              removeTimeSlot={removeTimeSlot}
+              saveAutoAnimeConfig={saveAutoAnimeConfig}
+            />
           )}
 
           {activeTab === "pending" && (
-            <section className="glass-panel screen-frame animate-floatIn rounded-2xl p-5">
-              <h3 className="text-xl font-bold font-display">Scheduled Queue</h3>
-
-              <div className="mt-4 space-y-3 md:hidden">
-                {pendingPosts.map((post) => (
-                  <article key={post._id} className="rounded-xl border border-slate-200 bg-white/85 p-3 shadow-sm">
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="status-pill inline-flex items-center gap-1 bg-slate-100 text-slate-700">
-                        {post.postType === "reel" ? <Film size={13} /> : <Image size={13} />}
-                        {post.postType}
-                      </span>
-                      <span
-                        className={`status-pill ${
-                          post.status === "processing"
-                            ? "bg-cyan-100 text-cyan-900"
-                            : "bg-amber-100 text-amber-900"
-                        }`}
-                      >
-                        {post.status}
-                      </span>
-                    </div>
-
-                    <p className="mt-2 line-clamp-2 text-sm text-slate-700">{post.caption || "No caption"}</p>
-
-                    <div className="mt-3 rounded-lg bg-slate-100/80 px-2.5 py-2 text-xs">
-                      <p className="muted-text">Scheduled</p>
-                      <p className="mt-0.5 font-semibold text-slate-700">{formatDate(post.scheduledTime)}</p>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteLocalMedia(post)}
-                        disabled={!hasDeletableLocalMedia(post) || Boolean(mediaDeleteInProgress[post._id])}
-                        className="ghost-btn inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs disabled:opacity-50"
-                      >
-                        <Trash2 size={12} />
-                        {mediaDeleteInProgress[post._id] ? "Deleting..." : "Delete Local Media"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleCancelPost(post)}
-                        disabled={Boolean(postCancelInProgress[post._id])}
-                        className="pro-btn inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs disabled:opacity-50"
-                      >
-                        <AlertTriangle size={12} />
-                        {postCancelInProgress[post._id] ? "Cancelling..." : "Cancel Post"}
-                      </button>
-                    </div>
-                  </article>
-                ))}
-
-                {!pendingPosts.length && (
-                  <p className="rounded-xl border border-slate-200 bg-white/85 px-3 py-5 text-center text-sm text-muted">
-                    No pending posts.
-                  </p>
-                )}
-              </div>
-
-              <div className="mt-4 hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[680px] text-left text-sm">
-                  <thead className="text-muted">
-                    <tr className="border-b border-white/10">
-                      <th className="py-3">Type</th>
-                      <th className="py-3">Caption</th>
-                      <th className="py-3">Scheduled</th>
-                      <th className="py-3">Status</th>
-                      <th className="py-3">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pendingPosts.map((post) => (
-                      <tr key={post._id} className="border-b border-white/5 transition hover:bg-white/[0.03]">
-                        <td className="py-3 pr-4">
-                          <span className="status-pill inline-flex items-center gap-1">
-                            {post.postType === "reel" ? <Film size={13} /> : <Image size={13} />}
-                            {post.postType}
-                          </span>
-                        </td>
-                        <td className="max-w-sm truncate py-3 pr-4">{post.caption || "-"}</td>
-                        <td className="py-3 pr-4">{formatDate(post.scheduledTime)}</td>
-                        <td className="py-3">
-                          <span
-                            className={`status-pill ${
-                              post.status === "processing"
-                                ? "bg-cyan-100 text-cyan-900"
-                                : "bg-amber-100 text-amber-900"
-                            }`}
-                          >
-                            {post.status}
-                          </span>
-                        </td>
-                        <td className="py-3">
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteLocalMedia(post)}
-                              disabled={!hasDeletableLocalMedia(post) || Boolean(mediaDeleteInProgress[post._id])}
-                              className="ghost-btn inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs disabled:opacity-50"
-                            >
-                              <Trash2 size={12} />
-                              {mediaDeleteInProgress[post._id] ? "Deleting..." : "Delete Media"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleCancelPost(post)}
-                              disabled={Boolean(postCancelInProgress[post._id])}
-                              className="pro-btn inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs disabled:opacity-50"
-                            >
-                              <AlertTriangle size={12} />
-                              {postCancelInProgress[post._id] ? "Cancelling..." : "Cancel"}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {!pendingPosts.length && (
-                      <tr>
-                        <td colSpan={5} className="py-6 text-center text-muted">
-                          No pending posts.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </section>
+            <PendingQueueSection 
+              pendingPosts={pendingPosts}
+              handleDeleteLocalMedia={handleDeleteLocalMedia}
+              handleCancelPost={handleCancelPost}
+              hasDeletableLocalMedia={hasDeletableLocalMedia}
+              mediaDeleteInProgress={mediaDeleteInProgress}
+              postCancelInProgress={postCancelInProgress}
+              formatDate={formatDate}
+            />
           )}
 
           {activeTab === "history" && (
-            <section className="glass-panel screen-frame animate-floatIn rounded-2xl p-5">
-              <h3 className="text-xl font-bold font-display">Posting History</h3>
-
-              <div className="mt-4 space-y-3 md:hidden">
-                {historyView.map((post) => (
-                  <article key={post._id} className="rounded-xl border border-slate-200 bg-white/85 p-3 shadow-sm">
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="status-pill inline-flex items-center gap-1 bg-slate-100 text-slate-700">
-                        {post.postType === "reel" ? <Film size={13} /> : <Image size={13} />}
-                        {post.postType}
-                      </span>
-                      <span
-                        className={`status-pill ${
-                          post.status === "posted"
-                            ? "bg-emerald-100 text-emerald-900"
-                            : post.status === "failed"
-                              ? "bg-red-100 text-red-900"
-                              : post.status === "processing"
-                                ? "bg-cyan-100 text-cyan-900"
-                                : "bg-amber-100 text-amber-900"
-                        }`}
-                      >
-                        {post.status}
-                      </span>
-                    </div>
-
-                    <div className="mt-3 rounded-lg bg-slate-100/80 px-2.5 py-2 text-xs">
-                      <p className="muted-text">Updated</p>
-                      <p className="mt-0.5 font-semibold text-slate-700">{formatDate(post.updatedAt)}</p>
-                    </div>
-
-                    <div className="mt-2 flex items-center gap-3 text-xs text-muted">
-                      <span>Attempts: {post.attempts}</span>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteLocalMedia(post)}
-                        disabled={!hasDeletableLocalMedia(post) || Boolean(mediaDeleteInProgress[post._id])}
-                        className="ghost-btn inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs disabled:opacity-50"
-                      >
-                        <Trash2 size={12} />
-                        {mediaDeleteInProgress[post._id] ? "Deleting..." : "Delete Local Media"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleCancelPost(post)}
-                        disabled={Boolean(postCancelInProgress[post._id])}
-                        className="pro-btn inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs disabled:opacity-50"
-                      >
-                        <AlertTriangle size={12} />
-                        {postCancelInProgress[post._id] ? "Deleting..." : "Delete Post"}
-                      </button>
-                    </div>
-
-                    {post.errorLog && (
-                      <p className="mt-2 line-clamp-2 break-words rounded-lg bg-red-50 px-2.5 py-2 text-xs text-red-700" title={post.errorLog}>
-                        {post.summarizedError.length > 120 ? `${post.summarizedError.slice(0, 117)}...` : post.summarizedError}
-                      </p>
-                    )}
-                  </article>
-                ))}
-
-                {!history.length && (
-                  <p className="rounded-xl border border-slate-200 bg-white/85 px-3 py-5 text-center text-sm text-muted">
-                    No history yet.
-                  </p>
-                )}
-              </div>
-
-              <div className="mt-4 hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[680px] text-left text-sm">
-                  <thead className="text-muted">
-                    <tr className="border-b border-white/10">
-                      <th className="py-3">Type</th>
-                      <th className="py-3">Time</th>
-                      <th className="py-3">Attempts</th>
-                      <th className="py-3">Status</th>
-                      <th className="py-3">Error</th>
-                      <th className="py-3">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {historyView.map((post) => (
-                      <tr key={post._id} className="border-b border-white/5 transition hover:bg-white/[0.03]">
-                        <td className="py-3 pr-4">{post.postType}</td>
-                        <td className="py-3 pr-4">{formatDate(post.updatedAt)}</td>
-                        <td className="py-3 pr-4">{post.attempts}</td>
-                        <td className="py-3 pr-4">
-                          <span
-                            className={`status-pill ${
-                              post.status === "posted"
-                                ? "bg-emerald-100 text-emerald-900"
-                                : post.status === "failed"
-                                  ? "bg-red-100 text-red-900"
-                                  : post.status === "processing"
-                                    ? "bg-cyan-100 text-cyan-900"
-                                    : "bg-amber-100 text-amber-900"
-                            }`}
-                          >
-                            {post.status}
-                          </span>
-                        </td>
-                        <td className="max-w-xs truncate py-3 text-muted" title={post.errorLog || ""}>
-                          {post.summarizedError}
-                        </td>
-                        <td className="py-3">
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteLocalMedia(post)}
-                              disabled={!hasDeletableLocalMedia(post) || Boolean(mediaDeleteInProgress[post._id])}
-                              className="ghost-btn inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs disabled:opacity-50"
-                            >
-                              <Trash2 size={12} />
-                              {mediaDeleteInProgress[post._id] ? "Deleting..." : "Delete Media"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleCancelPost(post)}
-                              disabled={Boolean(postCancelInProgress[post._id])}
-                              className="pro-btn inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs disabled:opacity-50"
-                            >
-                              <AlertTriangle size={12} />
-                              {postCancelInProgress[post._id] ? "Deleting..." : "Delete"}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {!history.length && (
-                      <tr>
-                        <td colSpan={6} className="py-6 text-center text-muted">
-                          No history yet.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </section>
+            <HistorySection 
+              historyView={historyView}
+              history={history}
+              handleDeleteLocalMedia={handleDeleteLocalMedia}
+              handleCancelPost={handleCancelPost}
+              hasDeletableLocalMedia={hasDeletableLocalMedia}
+              mediaDeleteInProgress={mediaDeleteInProgress}
+              postCancelInProgress={postCancelInProgress}
+              formatDate={formatDate}
+            />
           )}
         </main>
       </div>
